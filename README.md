@@ -21,8 +21,8 @@ Output: a `link-opportunities-YYYY-MM-DD.md` checklist you can work through in O
 ## Installation
 
 ```bash
-git clone <repo-url>
-cd series-cross-link-suggester
+git clone git@github.com:jamalhansen/blog-post-cross-link-suggester.git
+cd blog-post-cross-link-suggester
 uv sync
 ```
 
