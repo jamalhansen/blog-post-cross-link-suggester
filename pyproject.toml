@@ -9,10 +9,10 @@ dependencies = [
     "typer>=0.24.1",
 ]
 
-[tool.uv.sources]
-local-first-common = { git = "https://github.com/jamalhansen/local-first-common.git" }
-
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
 ]
+
+[tool.uv.sources]
+local-first-common = { git = "https://github.com/jamalhansen/local-first-common.git", branch = "main" }

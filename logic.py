@@ -6,14 +6,12 @@ Two modes:
 """
 
 import os
-import sys
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
 
 from local_first_common.providers import PROVIDERS
-from local_first_common.cli import resolve_provider
 
 app = typer.Typer(help=__doc__)
 
@@ -65,8 +63,6 @@ def draft(
         typer.echo(f"Error: Series directory not found: {series_path}", err=True)
         raise typer.Exit(1)
 
-    llm = resolve_provider(PROVIDERS, provider, model, debug=debug)
-
     if dry_run:
         typer.echo(f"[dry-run] Would analyse {post_path.name} against posts in {series_path}")
         return
@@ -77,7 +73,7 @@ def draft(
     # 3. For each chunk, retrieve semantically similar content from series posts
     # 4. Propose wikilink or URL for each match with suggested placement
     typer.echo("Draft mode: not yet implemented. Coming soon.")
-    typer.echo(f"\nDone. Processed: 0, Skipped: 0")
+    typer.echo("\nDone. Processed: 0, Skipped: 0")
 
 
 @app.command()
@@ -136,8 +132,6 @@ def audit(
         for p in posts:
             typer.echo(f"  {p.name}")
         return
-
-    llm = resolve_provider(PROVIDERS, provider, model, debug=debug)
 
     # TODO: implement audit mode
     # Phase 1: extract post summaries (title, topic, key concepts, audience stage), cache to SQLite

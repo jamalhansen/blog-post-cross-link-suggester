@@ -1,14 +1,10 @@
 """Tests for series-cross-link-suggester CLI."""
 
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
-import pytest
 from typer.testing import CliRunner
 
-from local_first_common.testing import MockProvider
 
-from series_cross_link_suggester import app
+from logic import app
 
 runner = CliRunner()
 
