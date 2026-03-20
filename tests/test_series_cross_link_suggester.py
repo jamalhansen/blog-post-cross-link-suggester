@@ -4,7 +4,7 @@
 from typer.testing import CliRunner
 
 
-from logic import app
+from cross_link.logic import app
 
 runner = CliRunner()
 
