@@ -6,18 +6,50 @@ Two modes:
 - **draft** — while writing a new post, surface cross-link candidates from existing series content
 - **audit** — batch-scan a full post archive and produce a checklist report of linking opportunities
 
-## What it does
+## Usage
 
-### Draft mode
-Chunks your draft into paragraphs and retrieves semantically similar content from published posts. Proposes wikilinks or URLs with suggested placement for each match.
+### Draft Mode
+Surface candidates for a single post being written:
 
-### Audit mode
-Two-phase pipeline:
-1. Extract post summaries (title, topic, key concepts, audience stage) — cached to SQLite
-2. For each post, suggest 2–4 cross-links with placement guidance (intro / body / closing)
+```bash
+uv run python src/main.py draft --file path/to/draft.md
+```
 
-Output: a `link-opportunities-YYYY-MM-DD.md` checklist you can work through in Obsidian.
+### Audit Mode
+Batch-scan a post archive and produce a report:
 
+```bash
+uv run python src/main.py audit --dir path/to/posts
+```
+
+## CLI Reference
+
+All tools in this series share a common set of CLI flags for model management via [local-first-common](https://github.com/jamalhansen/local-first-common).
+
+| Command | Argument | Description |
+|---|---|---|
+| `draft` | `--file` | Path to blog post draft |
+| `audit` | `--dir` | Path to post archive directory |
+
+Standard flags: `--provider`, `--model`, `--dry-run`, `--verbose`, `--debug`.
+
+## Project Structure
+
+This tool follows the [Local-First AI project blueprint](https://github.com/jamalhansen/local-first-common).
+
+```
+series-cross-link-suggester/
+├── src/
+│   ├── main.py          # Typer CLI entry point
+│   ├── logic.py         # Core suggestion orchestration
+│   ├── schema.py        # Pydantic models for links
+│   ├── prompts.py       # System and user prompt builders
+│   └── display.py       # Rich-based terminal formatting
+├── pyproject.toml       # Managed by uv
+└── tests/
+    ├── test_main.py     # CLI integration tests via MockProvider
+    └── ...
+```
 ## Installation
 
 ```bash
