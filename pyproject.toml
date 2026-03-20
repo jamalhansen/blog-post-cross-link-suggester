@@ -1,7 +1,7 @@
 [project]
 name = "series-cross-link-suggester"
 version = "0.1.0"
-description = "Add your description here"
+description = "Find internal cross-link opportunities across blog series posts"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
