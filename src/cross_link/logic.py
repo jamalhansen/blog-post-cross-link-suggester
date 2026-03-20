@@ -11,6 +11,10 @@ from typing import Annotated, Optional
 
 import typer
 
+from local_first_common.cli import (
+    dry_run_option,
+    no_llm_option,
+)
 from local_first_common.providers import PROVIDERS
 
 app = typer.Typer(help=__doc__)
@@ -36,7 +40,11 @@ def draft(
     ] = None,
     dry_run: Annotated[
         bool,
-        typer.Option("--dry-run", "-n", help="Preview suggestions without writing files."),
+        dry_run_option(),
+    ] = False,
+    no_llm: Annotated[
+        bool,
+        no_llm_option(),
     ] = False,
     verbose: Annotated[
         bool,
@@ -48,6 +56,9 @@ def draft(
     ] = False,
 ):
     """Surface cross-link candidates from existing series content for a draft post."""
+
+    if no_llm:
+        dry_run = True
 
     post_path = Path(post)
     if not post_path.exists():
@@ -104,7 +115,11 @@ def audit(
     ] = None,
     dry_run: Annotated[
         bool,
-        typer.Option("--dry-run", "-n", help="Preview what would be scanned without calling LLM."),
+        dry_run_option(),
+    ] = False,
+    no_llm: Annotated[
+        bool,
+        no_llm_option(),
     ] = False,
     verbose: Annotated[
         bool,
@@ -116,6 +131,9 @@ def audit(
     ] = False,
 ):
     """Batch-scan a post archive and produce a cross-link checklist report."""
+
+    if no_llm:
+        dry_run = True
 
     series_path = Path(series_dir)
     if not series_path.is_dir():
