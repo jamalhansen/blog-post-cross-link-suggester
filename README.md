@@ -31,7 +31,7 @@ All tools in this series share a common set of CLI flags for model management vi
 | `draft` | `--file` | Path to blog post draft |
 | `audit` | `--dir` | Path to post archive directory |
 
-Standard flags: `--provider`, `--model`, `--dry-run -n: Call LLM but do not save results. Print to stdout.
+Standard flags: `--provider`, `--model`, `--dry-run`, `--no-llm`
 
 ## Project Structure
 
@@ -79,7 +79,8 @@ uv run series_cross_link_suggester.py audit path/to/series/ --new-only my-new-po
 | `--series-dir` | `-s` | `$SERIES_DIR` | Directory of published series posts |
 | `--provider` | `-p` | `ollama` | LLM provider (ollama, anthropic, gemini, groq, deepseek) |
 | `--model` | `-m` | — | Override provider's default model |
-| `--dry-run -n: Call LLM but do not save results. Print to stdout.
+| `--dry-run` | `-n` | false | Call LLM but do not save results to disk/vault/DB. Print to stdout. |
+| `--no-llm` | | false | Skip LLM call, use mock response. Implies `--dry-run`. |
 | `--verbose` | `-v` | false | Extra debug output |
 | `--debug` | `-d` | false | Show raw prompts and LLM responses |
 
@@ -91,7 +92,8 @@ uv run series_cross_link_suggester.py audit path/to/series/ --new-only my-new-po
 | `--new-only` | — | — | Only find links for this post |
 | `--provider` | `-p` | `ollama` | LLM provider |
 | `--model` | `-m` | — | Override provider's default model |
-| `--dry-run -n: Call LLM but do not save results. Print to stdout.
+| `--dry-run` | `-n` | false | Call LLM but do not save results to disk/vault/DB. Print to stdout. |
+| `--no-llm` | | false | Skip LLM call, use mock response. Implies `--dry-run`. |
 | `--verbose` | `-v` | false | Extra debug output |
 | `--debug` | `-d` | false | Show raw prompts and LLM responses |
 
