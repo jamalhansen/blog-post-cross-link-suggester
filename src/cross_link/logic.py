@@ -6,6 +6,7 @@ Two modes:
 """
 
 import os
+from datetime import date
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -14,10 +15,98 @@ import typer
 from local_first_common.cli import (
     dry_run_option,
     no_llm_option,
+    resolve_provider,
 )
+from local_first_common.llm import parse_json_response
 from local_first_common.providers import PROVIDERS
 
+from .cache import get_cached_summary, init_cache, save_summary
+from .posts import chunk_paragraphs, read_post, slug_from_path
+from .prompts import (
+    AUDIT_SYSTEM,
+    DRAFT_SYSTEM,
+    SUMMARY_SYSTEM,
+    build_audit_prompt,
+    build_draft_prompt,
+    build_summary_prompt,
+)
+from .schema import DraftLinkSuggestion, LinkSuggestion, PostSummary
+
 app = typer.Typer(help=__doc__)
+
+
+def _extract_summary(provider, post_path: Path, slug: str, cache_path: str, verbose: bool) -> dict:
+    """Return summary dict for a post, using cache if available."""
+    cached = get_cached_summary(cache_path, slug, post_path)
+    if cached:
+        if verbose:
+            typer.echo(f"  [cached] {slug}")
+        return {"slug": slug, **cached}
+
+    if verbose:
+        typer.echo(f"  [summarizing] {slug} ...")
+
+    title, body = read_post(post_path)
+    raw = provider.complete(SUMMARY_SYSTEM, build_summary_prompt(body))
+    data = parse_json_response(raw)
+    summary = PostSummary(
+        title=data.get("title") or title,
+        main_topic=data.get("main_topic", ""),
+        key_concepts=data.get("key_concepts", []),
+        audience_stage=data.get("audience_stage", "intermediate"),
+    )
+    save_summary(cache_path, slug, post_path, summary.model_dump())
+    return {"slug": slug, **summary.model_dump()}
+
+
+def _format_audit_report(opportunities: list[dict]) -> str:
+    """Render audit results as a markdown checklist report."""
+    today = date.today().isoformat()
+    lines = ["# Internal Link Opportunity Report", f"Generated: {today}", ""]
+    for opp in opportunities:
+        slug = opp["post_slug"]
+        suggestions = opp["suggestions"]
+        lines.append(f"## {slug}")
+        if not suggestions:
+            lines.append("_(no opportunities found)_")
+        for s in suggestions:
+            try:
+                ls = LinkSuggestion(**s) if isinstance(s, dict) else s
+                lines.append(
+                    f"- [ ] Link to [[{ls.target_slug}]] — placement: {ls.placement}"
+                )
+                lines.append(f"      Reason: {ls.reason}")
+            except Exception:
+                continue
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _format_draft_suggestions(post_path: Path, paragraph_suggestions: list[tuple[str, list]]) -> str:
+    """Render draft mode results as readable terminal output."""
+    lines = [f"Cross-link suggestions for: {post_path.name}", ""]
+    any_found = False
+    for i, (para, suggestions) in enumerate(paragraph_suggestions, 1):
+        preview = para[:80].replace("\n", " ")
+        if len(para) > 80:
+            preview += "..."
+        if not suggestions:
+            continue
+        any_found = True
+        lines.append(f"Paragraph {i}: {preview}")
+        for s in suggestions:
+            try:
+                ds = DraftLinkSuggestion(**s) if isinstance(s, dict) else s
+                lines.append(
+                    f"  → [[{ds.target_slug}]] — anchor: \"{ds.suggested_anchor_text}\""
+                    f" ({ds.placement_hint})"
+                )
+            except Exception:
+                continue
+        lines.append("")
+    if not any_found:
+        lines.append("No cross-link opportunities found.")
+    return "\n".join(lines)
 
 
 @app.command()
@@ -38,6 +127,10 @@ def draft(
         Optional[str],
         typer.Option("--model", "-m", help="Override the provider's default model."),
     ] = None,
+    cache: Annotated[
+        str,
+        typer.Option("--cache", "-c", help="Path to SQLite cache file for series summaries"),
+    ] = ".cross-link-cache.db",
     dry_run: bool = dry_run_option(),
     no_llm: bool = no_llm_option(),
     verbose: Annotated[
@@ -68,17 +161,50 @@ def draft(
         typer.echo(f"Error: Series directory not found: {series_path}", err=True)
         raise typer.Exit(1)
 
+    series_posts = sorted(p for p in series_path.glob("**/*.md") if p != post_path)
+
     if dry_run:
-        typer.echo(f"[dry-run] Would analyse {post_path.name} against posts in {series_path}")
+        typer.echo(f"[dry-run] Would analyse {post_path.name} against {len(series_posts)} posts in {series_path}")
         return
 
-    # TODO: implement draft mode
-    # 1. Load draft post
-    # 2. Chunk into paragraphs
-    # 3. For each chunk, retrieve semantically similar content from series posts
-    # 4. Propose wikilink or URL for each match with suggested placement
-    typer.echo("Draft mode: not yet implemented. Coming soon.")
-    typer.echo("\nDone. Processed: 0, Skipped: 0")
+    llm = resolve_provider(PROVIDERS, provider, model, no_llm=no_llm, debug=debug, verbose=verbose)
+
+    # Build summaries for all series posts
+    init_cache(cache)
+    all_summaries = []
+    for p in series_posts:
+        slug = slug_from_path(p)
+        summary = _extract_summary(llm, p, slug, cache, verbose)
+        all_summaries.append(summary)
+
+    if not all_summaries:
+        typer.echo("No series posts found to compare against.")
+        raise typer.Exit(1)
+
+    # Chunk the draft and get suggestions per paragraph
+    _, body = read_post(post_path)
+    paragraphs = chunk_paragraphs(body)
+    if verbose:
+        typer.echo(f"\nAnalysing {len(paragraphs)} paragraphs in {post_path.name} ...")
+
+    paragraph_suggestions: list[tuple[str, list]] = []
+    for para in paragraphs:
+        prompt = build_draft_prompt(para, all_summaries)
+        if debug:
+            typer.echo(f"\n[debug] Draft prompt:\n{prompt}\n")
+        raw = llm.complete(DRAFT_SYSTEM, prompt)
+        if debug:
+            typer.echo(f"[debug] Response: {raw}")
+        suggestions = parse_json_response(raw)
+        if not isinstance(suggestions, list):
+            suggestions = []
+        paragraph_suggestions.append((para, suggestions))
+
+    output = _format_draft_suggestions(post_path, paragraph_suggestions)
+    typer.echo(output)
+
+    total = sum(len(s) for _, s in paragraph_suggestions)
+    typer.echo(f"\nDone. Processed: {len(paragraphs)} paragraphs, Suggestions: {total}")
 
 
 @app.command()
@@ -139,12 +265,65 @@ def audit(
             typer.echo(f"  {p.name}")
         return
 
-    # TODO: implement audit mode
-    # Phase 1: extract post summaries (title, topic, key concepts, audience stage), cache to SQLite
-    # Phase 2: for each post, find 2-4 linking opportunities using all summaries as context
-    # Output: markdown checklist report with [ ] items per post
-    typer.echo("Audit mode: not yet implemented. Coming soon.")
-    typer.echo(f"\nDone. Processed: 0, Skipped: {len(posts)}")
+    llm = resolve_provider(PROVIDERS, provider, model, no_llm=no_llm, debug=debug, verbose=verbose)
+
+    # Phase 1: extract summaries for all posts (with caching)
+    typer.echo(f"Phase 1: Extracting summaries for {len(posts)} posts ...")
+    init_cache(cache)
+    all_summaries: list[dict] = []
+    for p in posts:
+        slug = slug_from_path(p)
+        summary = _extract_summary(llm, p, slug, cache, verbose)
+        all_summaries.append(summary)
+
+    # Determine which posts to find opportunities for
+    if new_only:
+        new_slug = slug_from_path(Path(new_only))
+        target_posts = [p for p in posts if slug_from_path(p) == new_slug]
+        if not target_posts:
+            typer.echo(f"Error: --new-only post '{new_only}' not found in series directory.", err=True)
+            raise typer.Exit(1)
+    else:
+        target_posts = posts
+
+    # Phase 2: find linking opportunities for each target post
+    typer.echo(f"\nPhase 2: Finding opportunities for {len(target_posts)} posts ...")
+    opportunities: list[dict] = []
+    skipped = 0
+    for p in target_posts:
+        slug = slug_from_path(p)
+        title = next((s["title"] for s in all_summaries if s["slug"] == slug), slug)
+        _, content = read_post(p)
+
+        if verbose:
+            typer.echo(f"  [finding] {slug} ...")
+
+        prompt = build_audit_prompt(slug, title, content, all_summaries)
+        if debug:
+            typer.echo(f"\n[debug] Audit prompt for {slug}:\n{prompt}\n")
+
+        try:
+            raw = llm.complete(AUDIT_SYSTEM, prompt)
+            if debug:
+                typer.echo(f"[debug] Response: {raw}")
+            suggestions = parse_json_response(raw)
+            if not isinstance(suggestions, list):
+                suggestions = []
+        except Exception as e:
+            typer.echo(f"  Warning: failed for {slug}: {e}", err=True)
+            suggestions = []
+            skipped += 1
+
+        opportunities.append({"post_slug": slug, "post_title": title, "suggestions": suggestions})
+
+    # Generate report
+    report_text = _format_audit_report(opportunities)
+    output_path = Path(output) if output else Path(f"link-opportunities-{date.today().isoformat()}.md")
+
+    output_path.write_text(report_text, encoding="utf-8")
+    typer.echo(f"\nReport written to: {output_path}")
+    total_suggestions = sum(len(o["suggestions"]) for o in opportunities)
+    typer.echo(f"\nDone. Processed: {len(target_posts)}, Skipped: {skipped}, Suggestions: {total_suggestions}")
 
 
 if __name__ == "__main__":
