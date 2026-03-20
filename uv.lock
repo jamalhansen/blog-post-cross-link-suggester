@@ -214,7 +214,7 @@ sdist = { url = "https://files.pythonhosted.org/packages/0e/72/a3add0e4eec4eb9e2
 [[package]]
 name = "local-first-common"
 version = "0.1.0"
-source = { git = "https://github.com/jamalhansen/local-first-common.git?branch=main#8b44d3933fa0ba1d2a2f7cc33b768c682a4ee6bb" }
+source = { git = "https://github.com/jamalhansen/local-first-common.git?branch=main#e9faaea6042ceace4bed1512883a0efb26b8bfa7" }
 dependencies = [
     { name = "httpx" },
     { name = "langdetect" },
