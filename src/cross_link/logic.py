@@ -19,6 +19,7 @@ from local_first_common.cli import (
 )
 from local_first_common.llm import parse_json_response
 from local_first_common.providers import PROVIDERS
+from local_first_common.tracking import timed_run
 
 from .cache import get_cached_summary, init_cache, save_summary
 from .posts import chunk_paragraphs, read_post, slug_from_path
@@ -188,17 +189,19 @@ def draft(
         typer.echo(f"\nAnalysing {len(paragraphs)} paragraphs in {post_path.name} ...")
 
     paragraph_suggestions: list[tuple[str, list]] = []
-    for para in paragraphs:
-        prompt = build_draft_prompt(para, all_summaries)
-        if debug:
-            typer.echo(f"\n[debug] Draft prompt:\n{prompt}\n")
-        raw = llm.complete(DRAFT_SYSTEM, prompt)
-        if debug:
-            typer.echo(f"[debug] Response: {raw}")
-        suggestions = parse_json_response(raw)
-        if not isinstance(suggestions, list):
-            suggestions = []
-        paragraph_suggestions.append((para, suggestions))
+    with timed_run("series-cross-link-suggester", llm.model, source_location=str(post_path)) as _tracking:
+        for para in paragraphs:
+            prompt = build_draft_prompt(para, all_summaries)
+            if debug:
+                typer.echo(f"\n[debug] Draft prompt:\n{prompt}\n")
+            raw = llm.complete(DRAFT_SYSTEM, prompt)
+            if debug:
+                typer.echo(f"[debug] Response: {raw}")
+            suggestions = parse_json_response(raw)
+            if not isinstance(suggestions, list):
+                suggestions = []
+            paragraph_suggestions.append((para, suggestions))
+        _tracking.item_count = len(paragraphs)
 
     output = _format_draft_suggestions(post_path, paragraph_suggestions)
     typer.echo(output)
@@ -290,31 +293,33 @@ def audit(
     typer.echo(f"\nPhase 2: Finding opportunities for {len(target_posts)} posts ...")
     opportunities: list[dict] = []
     skipped = 0
-    for p in target_posts:
-        slug = slug_from_path(p)
-        title = next((s["title"] for s in all_summaries if s["slug"] == slug), slug)
-        _, content = read_post(p)
+    with timed_run("series-cross-link-suggester", llm.model, source_location=str(series_path)) as _tracking:
+        for p in target_posts:
+            slug = slug_from_path(p)
+            title = next((s["title"] for s in all_summaries if s["slug"] == slug), slug)
+            _, content = read_post(p)
 
-        if verbose:
-            typer.echo(f"  [finding] {slug} ...")
+            if verbose:
+                typer.echo(f"  [finding] {slug} ...")
 
-        prompt = build_audit_prompt(slug, title, content, all_summaries)
-        if debug:
-            typer.echo(f"\n[debug] Audit prompt for {slug}:\n{prompt}\n")
-
-        try:
-            raw = llm.complete(AUDIT_SYSTEM, prompt)
+            prompt = build_audit_prompt(slug, title, content, all_summaries)
             if debug:
-                typer.echo(f"[debug] Response: {raw}")
-            suggestions = parse_json_response(raw)
-            if not isinstance(suggestions, list):
-                suggestions = []
-        except Exception as e:
-            typer.echo(f"  Warning: failed for {slug}: {e}", err=True)
-            suggestions = []
-            skipped += 1
+                typer.echo(f"\n[debug] Audit prompt for {slug}:\n{prompt}\n")
 
-        opportunities.append({"post_slug": slug, "post_title": title, "suggestions": suggestions})
+            try:
+                raw = llm.complete(AUDIT_SYSTEM, prompt)
+                if debug:
+                    typer.echo(f"[debug] Response: {raw}")
+                suggestions = parse_json_response(raw)
+                if not isinstance(suggestions, list):
+                    suggestions = []
+            except Exception as e:
+                typer.echo(f"  Warning: failed for {slug}: {e}", err=True)
+                suggestions = []
+                skipped += 1
+
+            opportunities.append({"post_slug": slug, "post_title": title, "suggestions": suggestions})
+        _tracking.item_count = len(target_posts) - skipped
 
     # Generate report
     report_text = _format_audit_report(opportunities)
