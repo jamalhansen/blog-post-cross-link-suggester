@@ -19,7 +19,7 @@ from local_first_common.cli import (
 )
 from local_first_common.llm import parse_json_response
 from local_first_common.providers import PROVIDERS
-from local_first_common.tracking import timed_run
+from local_first_common.tracking import register_tool, timed_run
 
 from .cache import get_cached_summary, init_cache, save_summary
 from .posts import chunk_paragraphs, read_post, slug_from_path
@@ -32,6 +32,8 @@ from .prompts import (
     build_summary_prompt,
 )
 from .schema import DraftLinkSuggestion, LinkSuggestion, PostSummary
+
+_TOOL = register_tool("series-cross-link-suggester")
 
 app = typer.Typer(help=__doc__)
 
