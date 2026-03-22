@@ -202,6 +202,8 @@ def draft(
                 suggestions = []
             paragraph_suggestions.append((para, suggestions))
         _tracking.item_count = len(paragraphs)
+        _tracking.input_tokens = getattr(llm, "input_tokens", None) or None
+        _tracking.output_tokens = getattr(llm, "output_tokens", None) or None
 
     output = _format_draft_suggestions(post_path, paragraph_suggestions)
     typer.echo(output)
@@ -320,6 +322,8 @@ def audit(
 
             opportunities.append({"post_slug": slug, "post_title": title, "suggestions": suggestions})
         _tracking.item_count = len(target_posts) - skipped
+        _tracking.input_tokens = getattr(llm, "input_tokens", None) or None
+        _tracking.output_tokens = getattr(llm, "output_tokens", None) or None
 
     # Generate report
     report_text = _format_audit_report(opportunities)
