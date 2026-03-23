@@ -16,6 +16,7 @@ from local_first_common.cli import (
     dry_run_option,
     no_llm_option,
     resolve_provider,
+    resolve_dry_run,
 )
 from local_first_common.llm import parse_json_response
 from local_first_common.providers import PROVIDERS
@@ -147,8 +148,7 @@ def draft(
 ):
     """Surface cross-link candidates from existing series content for a draft post."""
 
-    if no_llm:
-        dry_run = True
+    dry_run = resolve_dry_run(dry_run, no_llm)
 
     post_path = Path(post)
     if not post_path.exists():
@@ -166,11 +166,11 @@ def draft(
 
     series_posts = sorted(p for p in series_path.glob("**/*.md") if p != post_path)
 
+    llm = resolve_provider(PROVIDERS, provider, model, no_llm=no_llm, debug=debug)
+
     if dry_run:
         typer.echo(f"[dry-run] Would analyse {post_path.name} against {len(series_posts)} posts in {series_path}")
-        return
-
-    llm = resolve_provider(PROVIDERS, provider, model, no_llm=no_llm, debug=debug, verbose=verbose)
+        raise typer.Exit(0)
 
     # Build summaries for all series posts
     init_cache(cache)
@@ -253,8 +253,7 @@ def audit(
 ):
     """Batch-scan a post archive and produce a cross-link checklist report."""
 
-    if no_llm:
-        dry_run = True
+    dry_run = resolve_dry_run(dry_run, no_llm)
 
     series_path = Path(series_dir)
     if not series_path.is_dir():
@@ -266,13 +265,13 @@ def audit(
         typer.echo(f"No markdown files found in {series_path}", err=True)
         raise typer.Exit(1)
 
+    llm = resolve_provider(PROVIDERS, provider, model, no_llm=no_llm, debug=debug)
+
     if dry_run:
         typer.echo(f"[dry-run] Would scan {len(posts)} posts in {series_path}")
         for p in posts:
             typer.echo(f"  {p.name}")
-        return
-
-    llm = resolve_provider(PROVIDERS, provider, model, no_llm=no_llm, debug=debug, verbose=verbose)
+        raise typer.Exit(0)
 
     # Phase 1: extract summaries for all posts (with caching)
     typer.echo(f"Phase 1: Extracting summaries for {len(posts)} posts ...")
