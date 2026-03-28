@@ -21,6 +21,7 @@ Return ONLY a JSON array where each item has:
 Rules:
 - Do not suggest linking to the post itself.
 - Only suggest posts that are genuinely relevant, not just tangentially related.
+- Avoid forward-linking: if posts are numbered or dated, only link to those that precede the current post.
 - Return an empty array [] if no strong opportunities exist."""
 
 

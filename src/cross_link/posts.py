@@ -17,8 +17,8 @@ def slug_from_path(path: Path) -> str:
     return re.sub(r"^\d+-", "", name)
 
 
-def read_post(path: Path) -> tuple[str, str]:
-    """Read a markdown post, returning (title, body_text).
+def read_post(path: Path) -> tuple[str, str, dict]:
+    """Read a markdown post, returning (title, body_text, metadata).
 
     Title is taken from frontmatter 'title' field, falling back to the first
     H1 heading in the body, then to the filename slug.
@@ -33,7 +33,43 @@ def read_post(path: Path) -> tuple[str, str]:
         match = re.search(r"^#\s+(.+)", body, re.MULTILINE)
         title = match.group(1).strip() if match else slug_from_path(path)
 
-    return title, body
+    return title, body, post.metadata
+
+
+def is_valid_post(path: Path) -> bool:
+    """Determine if a file is a candidate for cross-linking.
+
+    Excludes:
+    - Hidden files/directories
+    - Brainstorms, outlines, indexes, and drafts based on filename/title/frontmatter
+    - Posts explicitly marked as drafts or unpublished
+    """
+    if path.name.startswith(".") or any(p.startswith(".") for p in path.parts):
+        return False
+
+    # Skip files with "Brainstorm", "Outline", "Index", "Draft" in the filename
+    skip_keywords = {"brainstorm", "outline", "index", "planning", "draft"}
+    if any(kw in path.name.lower() for kw in skip_keywords):
+        return False
+
+    try:
+        title, _, metadata = read_post(path)
+    except Exception:
+        return False
+
+    # Check title for same keywords
+    if any(kw in title.lower() for kw in skip_keywords):
+        return False
+
+    # Check frontmatter
+    if metadata.get("draft") is True:
+        return False
+    if metadata.get("status") and metadata.get("status").lower() != "published":
+        return False
+    if metadata.get("type") == "index":
+        return False
+
+    return True
 
 
 def chunk_paragraphs(text: str, min_words: int = 20) -> list[str]:

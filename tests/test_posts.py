@@ -1,8 +1,8 @@
-"""Tests for cross_link.posts: slug_from_path, read_post, chunk_paragraphs."""
+"""Tests for cross_link.posts: slug_from_path, read_post, is_valid_post, chunk_paragraphs."""
 
 from pathlib import Path
 
-from cross_link.posts import chunk_paragraphs, read_post, slug_from_path
+from cross_link.posts import chunk_paragraphs, is_valid_post, read_post, slug_from_path
 
 
 class TestSlugFromPath:
@@ -28,28 +28,68 @@ class TestReadPost:
     def test_reads_frontmatter_title(self, tmp_path):
         post = tmp_path / "post.md"
         post.write_text("---\ntitle: My Great Post\n---\n\nBody text here.", encoding="utf-8")
-        title, body = read_post(post)
+        title, body, meta = read_post(post)
         assert title == "My Great Post"
         assert "Body text here." in body
+        assert meta == {"title": "My Great Post"}
 
     def test_falls_back_to_h1(self, tmp_path):
         post = tmp_path / "post.md"
         post.write_text("# H1 Title\n\nSome body text.", encoding="utf-8")
-        title, body = read_post(post)
+        title, body, meta = read_post(post)
         assert title == "H1 Title"
+        assert meta == {}
 
     def test_falls_back_to_slug(self, tmp_path):
         post = tmp_path / "my-post.md"
         post.write_text("Just some content with no title.", encoding="utf-8")
-        title, body = read_post(post)
+        title, body, meta = read_post(post)
         assert title == "my-post"
+        assert meta == {}
 
     def test_body_excludes_frontmatter(self, tmp_path):
         post = tmp_path / "post.md"
         post.write_text("---\ntitle: Title\nauthor: Jane\n---\n\nActual body.", encoding="utf-8")
-        _, body = read_post(post)
+        _, body, _ = read_post(post)
         assert "author" not in body
         assert "Actual body." in body
+
+
+class TestIsValidPost:
+    def test_valid_post(self, tmp_path):
+        post = tmp_path / "my-real-post.md"
+        post.write_text("---\ntitle: Real Post\n---\nBody content.", encoding="utf-8")
+        assert is_valid_post(post) is True
+
+    def test_skips_hidden(self, tmp_path):
+        post = tmp_path / ".hidden.md"
+        post.write_text("Hidden", encoding="utf-8")
+        assert is_valid_post(post) is False
+
+    def test_skips_brainstorm_filename(self, tmp_path):
+        post = tmp_path / "post-brainstorm.md"
+        post.write_text("Brainstorm content", encoding="utf-8")
+        assert is_valid_post(post) is False
+
+    def test_skips_brainstorm_title(self, tmp_path):
+        post = tmp_path / "post.md"
+        post.write_text("---\ntitle: My Brainstorm\n---\nBody", encoding="utf-8")
+        assert is_valid_post(post) is False
+
+    def test_skips_draft_frontmatter(self, tmp_path):
+        post = tmp_path / "post.md"
+        post.write_text("---\ndraft: true\n---\nBody", encoding="utf-8")
+        assert is_valid_post(post) is False
+
+    def test_skips_unpublished_status(self, tmp_path):
+        post = tmp_path / "post.md"
+        post.write_text("---\nstatus: draft\n---\nBody", encoding="utf-8")
+        assert is_valid_post(post) is False
+
+    def test_accepts_published_status(self, tmp_path):
+        post = tmp_path / "post.md"
+        post.write_text("---\nstatus: published\n---\nBody", encoding="utf-8")
+        assert is_valid_post(post) is True
 
 
 class TestChunkParagraphs:
