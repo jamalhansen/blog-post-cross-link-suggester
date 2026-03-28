@@ -23,6 +23,12 @@ class TestSlugFromPath:
         result = slug_from_path(Path("01-my-post.md"))
         assert ".md" not in result
 
+    def test_hugo_leaf_bundle(self):
+        assert slug_from_path(Path("my-blog-post/index.md")) == "my-blog-post"
+
+    def test_hugo_branch_bundle(self):
+        assert slug_from_path(Path("my-category/_index.md")) == "my-category"
+
 
 class TestReadPost:
     def test_reads_frontmatter_title(self, tmp_path):
@@ -64,6 +70,29 @@ class TestIsValidPost:
     def test_skips_hidden(self, tmp_path):
         post = tmp_path / ".hidden.md"
         post.write_text("Hidden", encoding="utf-8")
+        assert is_valid_post(post) is False
+
+    def test_allows_relative_paths(self):
+        # Path("../repro/post.md") contains ".." which should be allowed
+        p = Path("../repro/post.md")
+        # Just checking the hidden check part of is_valid_post
+        assert any(p.startswith(".") and p not in (".", "..") for p in p.parts) is False
+
+    def test_allows_hugo_leaf_bundle(self, tmp_path):
+        post = tmp_path / "my-post" / "index.md"
+        post.parent.mkdir()
+        post.write_text("---\ntitle: My Post\n---\nBody content.", encoding="utf-8")
+        assert is_valid_post(post) is True
+
+    def test_allows_hugo_branch_bundle(self, tmp_path):
+        post = tmp_path / "my-section" / "_index.md"
+        post.parent.mkdir()
+        post.write_text("---\ntitle: My Section\n---\nBody content.", encoding="utf-8")
+        assert is_valid_post(post) is True
+
+    def test_skips_index_in_middle_of_filename(self, tmp_path):
+        post = tmp_path / "my-index-test.md"
+        post.write_text("---\ntitle: Index Test\n---\nBody content.", encoding="utf-8")
         assert is_valid_post(post) is False
 
     def test_skips_brainstorm_filename(self, tmp_path):

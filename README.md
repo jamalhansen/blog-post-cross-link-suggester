@@ -17,6 +17,15 @@ uv sync
 
 ## Usage
 
+### Supported Post Structures
+
+`series-cross-link-suggester` supports both simple file-based and Hugo-style bundle structures:
+
+- **Simple File**: `posts/my-post.md` (Slug: `my-post`)
+- **Hugo Leaf Bundle**: `posts/my-post/index.md` (Slug: `my-post`)
+- **Hugo Branch Bundle**: `posts/my-category/_index.md` (Slug: `my-category`)
+- **Numeric Prefixes**: `posts/07-my-post.md` (Slug: `my-post`)
+
 ### Draft mode
 
 Surface link candidates while writing a new post:

@@ -285,7 +285,7 @@ def audit(
     if dry_run:
         typer.echo(f"[dry-run] Would scan {len(posts)} posts in {series_path}")
         for p in posts:
-            typer.echo(f"  {p.name}")
+            typer.echo(f"  {slug_from_path(p)}")
         raise typer.Exit(0)
 
     # Phase 1: extract summaries for all posts (with caching)

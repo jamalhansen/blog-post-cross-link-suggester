@@ -9,11 +9,18 @@ import frontmatter
 def slug_from_path(path: Path) -> str:
     """Derive a URL slug from a filename (strips numeric prefix and extension).
 
+    If the filename is 'index.md' or '_index.md', the parent directory name
+    is used as the slug.
+
     Examples:
         07-select-choosing-your-columns.md -> select-choosing-your-columns
+        my-blog-post/index.md              -> my-blog-post
         my-blog-post.md                    -> my-blog-post
     """
-    name = path.stem
+    if path.name.lower() in ("index.md", "_index.md"):
+        name = path.parent.name
+    else:
+        name = path.stem
     return re.sub(r"^\d+-", "", name)
 
 
@@ -40,16 +47,22 @@ def is_valid_post(path: Path) -> bool:
     """Determine if a file is a candidate for cross-linking.
 
     Excludes:
-    - Hidden files/directories
-    - Brainstorms, outlines, indexes, and drafts based on filename/title/frontmatter
+    - Hidden files/directories (starting with . but not . or ..)
+    - Brainstorms, outlines, and drafts based on filename/title/frontmatter
     - Posts explicitly marked as drafts or unpublished
     """
-    if path.name.startswith(".") or any(p.startswith(".") for p in path.parts):
+    # Skip truly hidden files/dirs (starting with . but not . or ..)
+    if any(p.startswith(".") and p not in (".", "..") for p in path.parts):
         return False
 
-    # Skip files with "Brainstorm", "Outline", "Index", "Draft" in the filename
-    skip_keywords = {"brainstorm", "outline", "index", "planning", "draft"}
+    # Skip files with specific keywords in filename
+    # We allow "index.md" and "_index.md" for Hugo compatibility
+    skip_keywords = {"brainstorm", "outline", "planning", "draft"}
     if any(kw in path.name.lower() for kw in skip_keywords):
+        return False
+
+    # Skip "index" files ONLY if they are not exactly index.md or _index.md
+    if "index" in path.name.lower() and path.name.lower() not in ("index.md", "_index.md"):
         return False
 
     try:
@@ -64,7 +77,7 @@ def is_valid_post(path: Path) -> bool:
     # Check frontmatter
     if metadata.get("draft") is True:
         return False
-    if metadata.get("status") and metadata.get("status").lower() != "published":
+    if metadata.get("status") and str(metadata.get("status")).lower() != "published":
         return False
     if metadata.get("type") == "index":
         return False
