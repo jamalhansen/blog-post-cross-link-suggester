@@ -265,6 +265,49 @@ class TestAuditCommandWithMock:
         # Only one post scanned
         assert "Processed: 1" in result.output
 
+    def test_audit_drops_hallucinated_slugs(self, tmp_path):
+        """Suggestions with slugs not in the known post list must be dropped."""
+        series = _make_series(tmp_path)
+        db = str(tmp_path / "cache.db")
+        output_path = str(tmp_path / "report.md")
+
+        hallucinated = json.dumps([
+            {
+                "target_slug": "sql-joins: SQL Joins Explained — How to combine tables",
+                "placement": "body",
+                "reason": "Relevant to joins",
+            }
+        ])
+
+        from local_first_common.testing import MockProvider
+
+        call_idx = 0
+        responses = [
+            MOCK_SUMMARY_RESPONSE, MOCK_SUMMARY_RESPONSE,
+            hallucinated, hallucinated,
+        ]
+        provider = MockProvider(response=MOCK_SUMMARY_RESPONSE)
+
+        def rotating_complete(system, user):
+            nonlocal call_idx
+            resp = responses[min(call_idx, len(responses) - 1)]
+            call_idx += 1
+            provider.calls.append((system, user))
+            return resp
+
+        provider.complete = rotating_complete
+
+        with patch("cross_link.logic.resolve_provider", return_value=provider):
+            runner.invoke(app, [
+                "audit", str(series),
+                "--cache", db,
+                "--output", output_path,
+            ])
+
+        report = Path(output_path).read_text()
+        # The hallucinated slug should not appear in the report
+        assert "sql-joins: SQL Joins Explained" not in report
+
     def test_audit_caches_summaries(self, tmp_path):
         """Second run should use cached summaries and make fewer LLM calls."""
         series = _make_series(tmp_path)

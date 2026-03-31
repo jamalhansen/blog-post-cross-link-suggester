@@ -84,11 +84,12 @@ class TestIsValidPost:
         post.write_text("---\ntitle: My Post\n---\nBody content.", encoding="utf-8")
         assert is_valid_post(post) is True
 
-    def test_allows_hugo_branch_bundle(self, tmp_path):
+    def test_skips_hugo_section_index(self, tmp_path):
+        # _index.md is a Hugo section/list page, never a real post
         post = tmp_path / "my-section" / "_index.md"
         post.parent.mkdir()
         post.write_text("---\ntitle: My Section\n---\nBody content.", encoding="utf-8")
-        assert is_valid_post(post) is True
+        assert is_valid_post(post) is False
 
     def test_skips_index_in_middle_of_filename(self, tmp_path):
         post = tmp_path / "my-index-test.md"

@@ -56,13 +56,17 @@ def is_valid_post(path: Path) -> bool:
         return False
 
     # Skip files with specific keywords in filename
-    # We allow "index.md" and "_index.md" for Hugo compatibility
+    # We allow "index.md" (Hugo leaf bundle) but NOT "_index.md" (Hugo section list page)
     skip_keywords = {"brainstorm", "outline", "planning", "draft"}
     if any(kw in path.name.lower() for kw in skip_keywords):
         return False
 
-    # Skip "index" files ONLY if they are not exactly index.md or _index.md
-    if "index" in path.name.lower() and path.name.lower() not in ("index.md", "_index.md"):
+    # _index.md is Hugo's section/list page — never a real post
+    if path.name.lower() == "_index.md":
+        return False
+
+    # Skip other "index" files except the Hugo leaf-bundle index.md
+    if "index" in path.name.lower() and path.name.lower() != "index.md":
         return False
 
     try:

@@ -47,6 +47,12 @@ class TestBuildAuditPrompt:
         assert "intro-to-sql" in prompt
         assert "sql-joins" in prompt
 
+    def test_slugs_in_brackets(self):
+        # Slugs must be in [brackets] so the model copies only the slug value
+        prompt = build_audit_prompt("window-functions", "Window Functions", "Content", SAMPLE_SUMMARIES)
+        assert "[intro-to-sql]" in prompt
+        assert "[sql-joins]" in prompt
+
     def test_excludes_target_post_itself(self):
         summaries = SAMPLE_SUMMARIES + [{
             "slug": "window-functions",
@@ -77,6 +83,12 @@ class TestBuildDraftPrompt:
         prompt = build_draft_prompt(paragraph, SAMPLE_SUMMARIES)
         assert "intro-to-sql" in prompt
         assert "sql-joins" in prompt
+
+    def test_slugs_in_brackets(self):
+        paragraph = "SQL paragraph text here."
+        prompt = build_draft_prompt(paragraph, SAMPLE_SUMMARIES)
+        assert "[intro-to-sql]" in prompt
+        assert "[sql-joins]" in prompt
 
     def test_includes_concepts(self):
         paragraph = "Some paragraph."

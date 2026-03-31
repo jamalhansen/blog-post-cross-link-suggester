@@ -67,32 +67,36 @@ def _format_audit_report(opportunities: list[dict], all_summaries: list[dict], l
     """Render audit results as a markdown checklist report."""
     today = date.today().isoformat()
     lines = ["# Internal Link Opportunity Report", f"Generated: {today}", ""]
-    
-    # Map slug to title for markdown link generation
+
+    # Map slug to title for markdown link generation; used for validation too
     slug_to_title = {s["slug"]: s["title"] for s in all_summaries}
+    known_slugs = set(slug_to_title)
 
     for opp in opportunities:
         slug = opp["post_slug"]
         suggestions = opp["suggestions"]
-        lines.append(f"## {slug}")
-        if not suggestions:
-            lines.append("_(no opportunities found)_")
+        valid_suggestions = []
         for s in suggestions:
             try:
                 ls = LinkSuggestion(**s) if isinstance(s, dict) else s
-                title = slug_to_title.get(ls.target_slug, ls.target_slug)
-                
-                if link_format == "markdown":
-                    link_text = f"[{title}](/posts/{ls.target_slug}/)"
-                else:
-                    link_text = f"[[{ls.target_slug}]]"
-
-                lines.append(
-                    f"- [ ] Link to {link_text} — placement: {ls.placement}"
-                )
-                lines.append(f"      Reason: {ls.reason}")
+                if ls.target_slug not in known_slugs:
+                    continue  # drop hallucinated or malformed slugs
+                valid_suggestions.append(ls)
             except Exception:
                 continue
+
+        if not valid_suggestions:
+            continue  # omit posts with no valid suggestions entirely
+
+        lines.append(f"## {slug}")
+        for ls in valid_suggestions:
+            title = slug_to_title[ls.target_slug]
+            if link_format == "markdown":
+                link_text = f"[{title}](/posts/{ls.target_slug}/)"
+            else:
+                link_text = f"[[{ls.target_slug}]]"
+            lines.append(f"- [ ] Link to {link_text} — placement: {ls.placement}")
+            lines.append(f"      Reason: {ls.reason}")
         lines.append("")
     return "\n".join(lines)
 

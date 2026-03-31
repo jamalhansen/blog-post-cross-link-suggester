@@ -11,17 +11,21 @@ Return ONLY a JSON object with these fields:
 
 AUDIT_SYSTEM = """You are a technical editor finding internal linking opportunities in a blog series.
 
-Given a target post and summaries of other posts in the series, identify 2-4 posts the target should link to.
+Given a target post and summaries of other posts in the series, identify up to 3 posts the target should link to.
+
+Each post in the list is formatted as:
+  [SLUG] Title — description
 
 Return ONLY a JSON array where each item has:
-- target_slug: slug of the post to link to (string)
+- target_slug: the SLUG value only (the text inside [brackets]), nothing else
 - placement: where in the post the link fits — "intro", "body", or "closing" (string)
 - reason: one sentence explaining why this link adds value (string)
 
 Rules:
+- target_slug must be copied exactly from [SLUG] — do not include the title or description.
 - Do not suggest linking to the post itself.
-- Only suggest posts that are genuinely relevant, not just tangentially related.
-- Avoid forward-linking: if posts are numbered or dated, only link to those that precede the current post.
+- Only suggest links that are directly relevant — shared topic, concept, or audience progression.
+- Prefer 1-2 strong links over 3 weak ones.
 - Return an empty array [] if no strong opportunities exist."""
 
 
@@ -29,8 +33,11 @@ DRAFT_SYSTEM = """You are a technical editor suggesting internal links for a blo
 
 Given a paragraph from a draft and summaries of published posts, suggest which published posts this paragraph should link to.
 
+Each post in the list is formatted as:
+  [SLUG] Title — description
+
 Return ONLY a JSON array (empty [] if no good matches) where each item has:
-- target_slug: slug of the post to link to (string)
+- target_slug: the SLUG value only (the text inside [brackets]), nothing else
 - suggested_anchor_text: 1-5 words from the paragraph that would be the link text (string)
 - placement_hint: brief note on exactly where in the paragraph to place the link (string)"""
 
@@ -48,7 +55,7 @@ def build_audit_prompt(
 ) -> str:
     """Build the user prompt for finding cross-link opportunities."""
     other_posts = "\n".join(
-        f"- {s['slug']}: {s['title']} — {s['main_topic']}"
+        f"- [{s['slug']}] {s['title']} — {s['main_topic']}"
         f" (concepts: {', '.join(s['key_concepts'][:3])})"
         for s in all_summaries
         if s["slug"] != target_slug
@@ -63,7 +70,7 @@ def build_audit_prompt(
 def build_draft_prompt(paragraph: str, all_summaries: list[dict]) -> str:
     """Build the user prompt for suggesting links in a draft paragraph."""
     posts_list = "\n".join(
-        f"- {s['slug']}: {s['title']} — {s['main_topic']}"
+        f"- [{s['slug']}] {s['title']} — {s['main_topic']}"
         f" (concepts: {', '.join(s['key_concepts'][:3])})"
         for s in all_summaries
     )
