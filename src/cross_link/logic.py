@@ -63,7 +63,7 @@ def _extract_summary(provider, post_path: Path, slug: str, cache_path: str, verb
     return {"slug": slug, **summary.model_dump()}
 
 
-def _format_audit_report(opportunities: list[dict], all_summaries: list[dict], link_format: str = "wiki") -> str:
+def _format_audit_report(opportunities: list[dict], all_summaries: list[dict], link_format: str = "markdown") -> str:
     """Render audit results as a markdown checklist report."""
     today = date.today().isoformat()
     lines = ["# Internal Link Opportunity Report", f"Generated: {today}", ""]
@@ -90,12 +90,15 @@ def _format_audit_report(opportunities: list[dict], all_summaries: list[dict], l
 
         lines.append(f"## {slug}")
         for ls in valid_suggestions:
-            title = slug_to_title[ls.target_slug]
             if link_format == "markdown":
-                link_text = f"[{title}](/posts/{ls.target_slug}/)"
+                link_target = f"[{ls.anchor_text}](/posts/{ls.target_slug}/)"
             else:
-                link_text = f"[[{ls.target_slug}]]"
-            lines.append(f"- [ ] Link to {link_text} — placement: {ls.placement}")
+                link_target = f"[[{ls.target_slug}]] (on phrase: \"{ls.anchor_text}\")"
+            
+            lines.append(f"- [ ] Link to {ls.target_slug} — placement: {ls.placement}")
+            lines.append(f"      Anchor: \"{ls.anchor_text}\"")
+            lines.append(f"      Context: \"{ls.context_phrase}\"")
+            lines.append(f"      Suggested: {link_target}")
             lines.append(f"      Reason: {ls.reason}")
         lines.append("")
     return "\n".join(lines)
@@ -258,7 +261,7 @@ def audit(
     link_format: Annotated[
         str,
         typer.Option("--format", "-f", help="Link format: 'wiki' for [[slug]] or 'markdown' for [Title](/posts/slug/)"),
-    ] = "wiki",
+    ] = "markdown",
     dry_run: bool = dry_run_option(),
     no_llm: bool = no_llm_option(),
     verbose: Annotated[
@@ -355,47 +358,37 @@ def audit(
     typer.echo(f"\nDone. Processed: {len(target_posts)}, Skipped: {skipped}, Suggestions: {total_suggestions}")
 
 
-def _apply_links_to_file(file_path: Path, link_placements: list[tuple[str, str]]) -> bool:
-    """Insert links into a markdown file based on placement.
-    link_placements is a list of (formatted_link_text, placement) tuples.
+def _apply_links_to_file(file_path: Path, link_details: list[dict]) -> bool:
+    """Insert links into a markdown file based on anchor text.
+    link_details is a list of dicts with 'anchor', 'context', and 'replacement'.
     """
-    import re
     import frontmatter
 
     raw = file_path.read_text(encoding="utf-8")
     post = frontmatter.loads(raw)
     body = post.content
 
-    new_links_by_placement = {"intro": [], "body": [], "closing": []}
-    for link_text, placement in link_placements:
-        new_links_by_placement[placement.lower()].append(link_text)
+    modified = False
+    for detail in link_details:
+        anchor = detail["anchor"]
+        context = detail["context"]
+        replacement = detail["replacement"]
 
-    # Intro links
-    if new_links_by_placement["intro"]:
-        link_str = " " + " ".join(new_links_by_placement["intro"])
-        # Insert after first H1 or as first paragraph
-        match = re.search(r"^#\s+.+", body, re.MULTILINE)
-        if match:
-            body = body[:match.end()] + f"\n\nSee also:{link_str}" + body[match.end():]
-        else:
-            body = f"See also:{link_str}\n\n" + body
+        if context in body:
+            # First try replacing within the specific context sentence
+            new_context = context.replace(anchor, replacement, 1)
+            body = body.replace(context, new_context, 1)
+            modified = True
+        elif anchor in body:
+            # Fallback to direct anchor replacement if context not found exactly
+            body = body.replace(anchor, replacement, 1)
+            modified = True
 
-    # Body links (middle)
-    if new_links_by_placement["body"]:
-        link_str = " " + " ".join(new_links_by_placement["body"])
-        paragraphs = body.split("\n\n")
-        mid = len(paragraphs) // 2
-        paragraphs.insert(mid, f"Related:{link_str}")
-        body = "\n\n".join(paragraphs)
-
-    # Closing links
-    if new_links_by_placement["closing"]:
-        link_str = " " + " ".join(new_links_by_placement["closing"])
-        body = body.rstrip() + f"\n\nRead more:{link_str}\n"
-
-    post.content = body
-    file_path.write_text(frontmatter.dumps(post), encoding="utf-8")
-    return True
+    if modified:
+        post.content = body
+        file_path.write_text(frontmatter.dumps(post), encoding="utf-8")
+    
+    return modified
 
 
 @app.command()
@@ -430,25 +423,42 @@ def apply(
 
     report_text = report_path.read_text(encoding="utf-8")
 
-    # Parse checked links: {source_slug: [(formatted_link, placement), ...]}
-    actions: dict[str, list[tuple[str, str]]] = {}
+    # Parse checked links: {source_slug: [detail_dicts]}
+    actions: dict[str, list[dict]] = {}
     current_source = None
-    for line in report_text.splitlines():
+    
+    # Simple state machine to parse the new report format
+    lines = report_text.splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i]
         source_match = re.match(r"^##\s+(.+)", line)
         if source_match:
             current_source = source_match.group(1).strip()
+            i += 1
             continue
 
-        # Support both wiki [[slug]] and markdown [Title](/posts/slug/)
-        link_match = re.search(
-            r"^\s*-\s+\[x\]\s+Link\s+to\s+(.+?)\s+—\s+placement:\s+(.+)", line
-        )
+        link_match = re.search(r"^\s*-\s+\[x\]\s+Link\s+to\s+(.+?)\s+—", line)
         if link_match and current_source:
-            link_text = link_match.group(1).strip()
-            placement = link_match.group(2).strip()
-            if current_source not in actions:
-                actions[current_source] = []
-            actions[current_source].append((link_text, placement))
+            # We found a checked link, now look ahead for details
+            detail = {"target": link_match.group(1).strip()}
+            i += 1
+            while i < len(lines) and not lines[i].startswith("##") and not lines[i].strip().startswith("-"):
+                detail_line = lines[i].strip()
+                if detail_line.startswith("Anchor:"):
+                    detail["anchor"] = detail_line.split("Anchor:", 1)[1].strip().strip('"')
+                elif detail_line.startswith("Context:"):
+                    detail["context"] = detail_line.split("Context:", 1)[1].strip().strip('"')
+                elif detail_line.startswith("Suggested:"):
+                    detail["replacement"] = detail_line.split("Suggested:", 1)[1].strip()
+                i += 1
+            
+            if "anchor" in detail and "replacement" in detail:
+                if current_source not in actions:
+                    actions[current_source] = []
+                actions[current_source].append(detail)
+            continue
+        i += 1
 
     if not actions:
         typer.echo("No checked link opportunities found in report (use [x] to select).")
@@ -459,20 +469,20 @@ def apply(
     slug_to_path_map = {slug_from_path(f): f for f in all_files}
 
     modified_count = 0
-    for source_slug, links in actions.items():
+    for source_slug, link_details in actions.items():
         if source_slug not in slug_to_path_map:
             typer.echo(f"Warning: Could not find file for slug '{source_slug}'", err=True)
             continue
 
         file_path = slug_to_path_map[source_slug]
         if dry_run:
-            typer.echo(f"[dry-run] Would add {len(links)} links to {file_path.name}")
-            for link_text, placement in links:
-                typer.echo(f"  + {link_text} ({placement})")
+            typer.echo(f"[dry-run] Would add {len(link_details)} links to {file_path.name}")
+            for d in link_details:
+                typer.echo(f"  + Replace \"{d['anchor']}\" with \"{d['replacement']}\"")
         else:
             if verbose:
                 typer.echo(f"Applying links to {file_path.name} ...")
-            if _apply_links_to_file(file_path, links):
+            if _apply_links_to_file(file_path, link_details):
                 modified_count += 1
 
     if dry_run:

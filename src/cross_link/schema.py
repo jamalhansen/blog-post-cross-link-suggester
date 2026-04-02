@@ -12,6 +12,8 @@ class PostSummary(BaseModel):
 
 class LinkSuggestion(BaseModel):
     target_slug: str = Field(description="Slug of the post to link to")
+    anchor_text: str = Field(description="The specific phrase from the post content to use as anchor text for the link")
+    context_phrase: str = Field(description="The full sentence containing the anchor text to ensure unique replacement")
     placement: str = Field(description="intro | body | closing")
     reason: str = Field(description="One sentence explaining why this link adds value")
 

@@ -12,7 +12,7 @@ title: My Post
 
 This is the first paragraph.
 
-This is the second paragraph.
+This is the second paragraph. Relational databases are cool.
 
 This is the third paragraph.
 """
@@ -21,9 +21,21 @@ REPORT_CONTENT = """# Internal Link Opportunity Report
 Generated: 2026-03-28
 
 ## my-post
-- [x] Link to [[target-post]] — placement: intro
-- [ ] Link to [[other-post]] — placement: body
-- [x] Link to [[last-post]] — placement: closing
+- [x] Link to target-post — placement: intro
+      Anchor: "first paragraph"
+      Context: "This is the first paragraph."
+      Suggested: [first paragraph](/posts/target-post/)
+      Reason: Relevant link.
+- [ ] Link to other-post — placement: body
+      Anchor: "databases"
+      Context: "Relational databases are cool."
+      Suggested: [databases](/posts/other-post/)
+      Reason: Database link.
+- [x] Link to last-post — placement: closing
+      Anchor: "third paragraph"
+      Context: "This is the third paragraph."
+      Suggested: [third paragraph](/posts/last-post/)
+      Reason: Final link.
 """
 
 def test_apply_checked_links(tmp_path):
@@ -49,8 +61,8 @@ def test_apply_checked_links(tmp_path):
     
     # Check the file content
     updated = post_file.read_text(encoding="utf-8")
-    assert "See also: [[target-post]]" in updated
-    assert "Read more: [[last-post]]" in updated
+    assert "[first paragraph](/posts/target-post/)" in updated
+    assert "[third paragraph](/posts/last-post/)" in updated
     assert "other-post" not in updated  # unchecked
 
 def test_apply_dry_run(tmp_path):
@@ -85,7 +97,10 @@ def test_apply_markdown_links(tmp_path):
     
     markdown_report = """# Internal Link Opportunity Report
 ## my-post
-- [x] Link to [Target Post Title](/posts/target-post/) — placement: intro
+- [x] Link to target-post — placement: intro
+      Anchor: "first paragraph"
+      Context: "This is the first paragraph."
+      Suggested: [first paragraph](/posts/target-post/)
 """
     report = tmp_path / "report_md.md"
     report.write_text(markdown_report, encoding="utf-8")
@@ -97,4 +112,4 @@ def test_apply_markdown_links(tmp_path):
     
     assert result.exit_code == 0
     updated = post_file.read_text(encoding="utf-8")
-    assert "See also: [Target Post Title](/posts/target-post/)" in updated
+    assert "[first paragraph](/posts/target-post/)" in updated

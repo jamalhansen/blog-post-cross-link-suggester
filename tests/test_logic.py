@@ -20,6 +20,8 @@ MOCK_SUMMARY_RESPONSE = json.dumps({
 MOCK_AUDIT_SUGGESTIONS = json.dumps([
     {
         "target_slug": "sql-joins",
+        "anchor_text": "JOIN",
+        "context_phrase": "When you need to combine data from multiple tables, JOIN is the tool you reach for.",
         "placement": "body",
         "reason": "Readers who understand SELECT will naturally want to learn JOIN next.",
     }
@@ -225,7 +227,8 @@ class TestAuditCommandWithMock:
 
         report_text = Path(output_path).read_text()
         # Should contain checklist items
-        assert "- [ ] Link to [[" in report_text
+        assert "- [ ] Link to sql-joins" in report_text
+        assert "Anchor: \"JOIN\"" in report_text
         assert "placement:" in report_text
         assert "Reason:" in report_text
 

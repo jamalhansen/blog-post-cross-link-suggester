@@ -18,10 +18,14 @@ Each post in the list is formatted as:
 
 Return ONLY a JSON array where each item has:
 - target_slug: the SLUG value only (the text inside [brackets]), nothing else
+- anchor_text: a specific phrase (1-5 words) from the target post's provided content that should become the link.
+- context_phrase: the full sentence from the target post's provided content that contains the anchor_text.
 - placement: where in the post the link fits — "intro", "body", or "closing" (string)
 - reason: one sentence explaining why this link adds value (string)
 
 Rules:
+- anchor_text MUST exist exactly within the provided content.
+- context_phrase MUST exist exactly within the provided content.
 - target_slug must be copied exactly from [SLUG] — do not include the title or description.
 - Do not suggest linking to the post itself.
 - Only suggest links that are directly relevant — shared topic, concept, or audience progression.
@@ -62,7 +66,7 @@ def build_audit_prompt(
     )
     return (
         f"Target post: {target_title} (slug: {target_slug})\n\n"
-        f"Post opening:\n{target_content[:800]}\n\n"
+        f"Post content:\n{target_content[:4000]}\n\n"
         f"Other posts in the series:\n{other_posts}"
     )
 
