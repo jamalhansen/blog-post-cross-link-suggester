@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 class PostSummary(BaseModel):
     title: str
+    series_slug: str | None = None
     main_topic: str = Field(description="One-sentence description of what the post teaches")
     key_concepts: list[str] = Field(description="3-5 short concept names covered in this post")
     audience_stage: str = Field(description="beginner | intermediate | advanced")

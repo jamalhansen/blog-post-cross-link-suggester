@@ -23,7 +23,7 @@ from local_first_common.providers import PROVIDERS
 from local_first_common.tracking import register_tool, timed_run
 
 from .cache import get_cached_summary, init_cache, save_summary
-from .posts import chunk_paragraphs, is_valid_post, read_post, slug_from_path
+from .posts import chunk_paragraphs, is_valid_post, read_post, slug_from_path, slugify
 from .prompts import (
     AUDIT_SYSTEM,
     DRAFT_SYSTEM,
@@ -50,11 +50,19 @@ def _extract_summary(provider, post_path: Path, slug: str, cache_path: str, verb
     if verbose:
         typer.echo(f"  [summarizing] {slug} ...")
 
-    title, body, _ = read_post(post_path)
+    title, body, metadata = read_post(post_path)
+    
+    series = metadata.get("series")
+    series_slug = None
+    if series:
+        series_name = series[0] if isinstance(series, list) else series
+        series_slug = slugify(series_name)
+
     raw = provider.complete(SUMMARY_SYSTEM, build_summary_prompt(body))
     data = parse_json_response(raw)
     summary = PostSummary(
         title=data.get("title") or title,
+        series_slug=series_slug,
         main_topic=data.get("main_topic", ""),
         key_concepts=data.get("key_concepts", []),
         audience_stage=data.get("audience_stage", "intermediate"),
@@ -68,9 +76,9 @@ def _format_audit_report(opportunities: list[dict], all_summaries: list[dict], l
     today = date.today().isoformat()
     lines = ["# Internal Link Opportunity Report", f"Generated: {today}", ""]
 
-    # Map slug to title for markdown link generation; used for validation too
-    slug_to_title = {s["slug"]: s["title"] for s in all_summaries}
-    known_slugs = set(slug_to_title)
+    # Map slug to summary for URL generation and validation
+    slug_to_summary = {s["slug"]: s for s in all_summaries}
+    known_slugs = set(slug_to_summary)
 
     for opp in opportunities:
         slug = opp["post_slug"]
@@ -90,8 +98,13 @@ def _format_audit_report(opportunities: list[dict], all_summaries: list[dict], l
 
         lines.append(f"## {slug}")
         for ls in valid_suggestions:
+            summary = slug_to_summary[ls.target_slug]
             if link_format == "markdown":
-                link_target = f"[{ls.anchor_text}](/posts/{ls.target_slug}/)"
+                if summary.get("series_slug"):
+                    url = f"/blog/{summary['series_slug']}/{ls.target_slug}/"
+                else:
+                    url = f"/blog/{ls.target_slug}/"
+                link_target = f"[{ls.anchor_text}]({url})"
             else:
                 link_target = f"[[{ls.target_slug}]] (on phrase: \"{ls.anchor_text}\")"
             
@@ -362,11 +375,18 @@ def _apply_links_to_file(file_path: Path, link_details: list[dict]) -> bool:
     """Insert links into a markdown file based on anchor text.
     link_details is a list of dicts with 'anchor', 'context', and 'replacement'.
     """
-    import frontmatter
-
     raw = file_path.read_text(encoding="utf-8")
-    post = frontmatter.loads(raw)
-    body = post.content
+    
+    # Split by frontmatter delimiters
+    parts = raw.split("---", 2)
+    if len(parts) < 3:
+        # No frontmatter or malformed, treat as whole body
+        header = ""
+        body = raw
+    else:
+        # parts[0] is usually empty, parts[1] is frontmatter, parts[2] is body
+        header = f"---{parts[1]}---"
+        body = parts[2]
 
     modified = False
     for detail in link_details:
@@ -385,8 +405,7 @@ def _apply_links_to_file(file_path: Path, link_details: list[dict]) -> bool:
             modified = True
 
     if modified:
-        post.content = body
-        file_path.write_text(frontmatter.dumps(post), encoding="utf-8")
+        file_path.write_text(f"{header}{body}", encoding="utf-8")
     
     return modified
 

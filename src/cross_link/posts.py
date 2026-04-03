@@ -1,9 +1,22 @@
 """Post file utilities: slug derivation, reading, chunking, frontmatter."""
 
 import re
+import unicodedata
 from pathlib import Path
 
 import frontmatter
+
+
+def slugify(text: str) -> str:
+    """
+    Convert to ASCII. Convert spaces to hyphens.
+    Remove characters that aren't alphanumerics, underscores, or hyphens.
+    Convert to lowercase. Strip leading and trailing whitespace.
+    """
+    text = str(text)
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    text = re.sub(r"[^\w\s-]", "", text).strip().lower()
+    return re.sub(r"[-\s]+", "-", text)
 
 
 def slug_from_path(path: Path) -> str:
