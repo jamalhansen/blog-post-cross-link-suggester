@@ -24,17 +24,17 @@ Generated: 2026-03-28
 - [x] Link to target-post — placement: intro
       Anchor: "first paragraph"
       Context: "This is the first paragraph."
-      Suggested: [first paragraph](/posts/target-post/)
+      Suggested: [first paragraph](/blog/target-post/)
       Reason: Relevant link.
 - [ ] Link to other-post — placement: body
       Anchor: "databases"
       Context: "Relational databases are cool."
-      Suggested: [databases](/posts/other-post/)
+      Suggested: [databases](/blog/other-post/)
       Reason: Database link.
 - [x] Link to last-post — placement: closing
       Anchor: "third paragraph"
       Context: "This is the third paragraph."
-      Suggested: [third paragraph](/posts/last-post/)
+      Suggested: [third paragraph](/blog/last-post/)
       Reason: Final link.
 """
 
@@ -61,8 +61,8 @@ def test_apply_checked_links(tmp_path):
     
     # Check the file content
     updated = post_file.read_text(encoding="utf-8")
-    assert "[first paragraph](/posts/target-post/)" in updated
-    assert "[third paragraph](/posts/last-post/)" in updated
+    assert "[first paragraph](/blog/target-post/)" in updated
+    assert "[third paragraph](/blog/last-post/)" in updated
     assert "other-post" not in updated  # unchecked
 
 def test_apply_dry_run(tmp_path):

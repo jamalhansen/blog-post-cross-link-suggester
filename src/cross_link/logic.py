@@ -273,7 +273,7 @@ def audit(
     ] = None,
     link_format: Annotated[
         str,
-        typer.Option("--format", "-f", help="Link format: 'wiki' for [[slug]] or 'markdown' for [Title](/posts/slug/)"),
+        typer.Option("--format", "-f", help="Link format: 'wiki' for [[slug]] or 'markdown' for [Title](/blog/slug/)"),
     ] = "markdown",
     dry_run: bool = dry_run_option(),
     no_llm: bool = no_llm_option(),

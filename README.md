@@ -95,7 +95,7 @@ uv run cross-link draft path/to/draft.md --series-dir path/to/series/ --no-llm
 | `--output` | `-o` | auto | Output report path (default: `link-opportunities-YYYY-MM-DD.md`) |
 | `--cache` | `-c` | `.cross-link-cache.db` | SQLite cache for post summaries |
 | `--new-only` | — | — | Only find link opportunities for this specific post file |
-| `--format` | `-f` | `wiki` | Link format: `wiki` ([[slug]]) or `markdown` ([Title](/posts/slug/)) |
+| `--format` | `-f` | `wiki` | Link format: `wiki` ([[slug]]) or `markdown` ([Title](/blog/slug/)) |
 | `--provider` | `-p` | `ollama` | LLM provider |
 | `--model` | `-m` | — | Override provider's default model |
 | `--dry-run` | `-n` | false | Call LLM but do not write output files. Print to stdout. |
