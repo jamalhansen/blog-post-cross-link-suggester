@@ -24,8 +24,9 @@ Return ONLY a JSON array where each item has:
 - reason: one sentence explaining why this link adds value (string)
 
 Rules:
-- anchor_text MUST exist exactly within the provided content.
-- context_phrase MUST exist exactly within the provided content.
+- anchor_text MUST exist EXACTLY as written within the provided content (case-sensitive).
+- context_phrase MUST exist EXACTLY as written within the provided content (case-sensitive).
+- DO NOT paraphrase or summarize. Use DIRECT QUOTES ONLY.
 - target_slug must be copied exactly from [SLUG] — do not include the title or description.
 - Do not suggest linking to the post itself.
 - Only suggest links that are directly relevant — shared topic, concept, or audience progression.

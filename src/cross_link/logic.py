@@ -416,12 +416,15 @@ def _apply_links_to_file(file_path: Path, link_details: list[dict]) -> bool:
         if context in body:
             # First try replacing within the specific context sentence
             new_context = context.replace(anchor, replacement, 1)
-            body = body.replace(context, new_context, 1)
-            modified = True
+            if new_context != context:
+                body = body.replace(context, new_context, 1)
+                modified = True
         elif anchor in body:
             # Fallback to direct anchor replacement if context not found exactly
-            body = body.replace(anchor, replacement, 1)
-            modified = True
+            new_body = body.replace(anchor, replacement, 1)
+            if new_body != body:
+                body = new_body
+                modified = True
 
     if modified:
         file_path.write_text(f"{header}{body}", encoding="utf-8")
