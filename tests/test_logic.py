@@ -39,9 +39,7 @@ SERIES_POST_CONTENT = """---
 title: SQL Joins Explained
 ---
 
-SQL joins are one of the most powerful features of relational databases. When you need to
-combine data from multiple tables, JOIN is the tool you reach for. Understanding how different
-join types work is essential for writing efficient queries in any production system.
+SQL joins are one of the most powerful features of relational databases. When you need to combine data from multiple tables, JOIN is the tool you reach for. Understanding how different join types work is essential for writing efficient queries in any production system.
 
 There are several types of joins including INNER JOIN, LEFT JOIN, RIGHT JOIN, and FULL OUTER JOIN.
 Each serves a different purpose depending on whether you want to include unmatched rows from

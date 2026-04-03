@@ -370,6 +370,24 @@ def audit(
                 if not isinstance(suggestions, list):
                     suggestions = []
                 
+                # Validation: anchor and context must exist in content
+                valid_for_post = []
+                for s in suggestions:
+                    try:
+                        ls = LinkSuggestion(**s)
+                        if ls.anchor_text not in content:
+                            if verbose:
+                                typer.echo(f"    ! Dropping hallucinated anchor: \"{ls.anchor_text}\"")
+                            continue
+                        if ls.context_phrase not in content:
+                            if verbose:
+                                typer.echo(f"    ! Dropping hallucinated context: \"{ls.context_phrase}\"")
+                            continue
+                        valid_for_post.append(ls.model_dump())
+                    except Exception:
+                        continue
+                suggestions = valid_for_post
+                
                 run.item_count = 1
                 run.input_tokens = getattr(llm, "input_tokens", None) or None
                 run.output_tokens = getattr(llm, "output_tokens", None) or None
