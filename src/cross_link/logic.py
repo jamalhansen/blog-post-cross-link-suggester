@@ -7,7 +7,6 @@ Two modes:
 
 import os
 import re
-import shutil
 from datetime import date
 from pathlib import Path
 from typing import Annotated, Optional
@@ -23,9 +22,11 @@ from local_first_common.cli import (
 from local_first_common.llm import parse_json_response
 from local_first_common.providers import PROVIDERS
 from local_first_common.tracking import register_tool, timed_run
+from local_first_common.text import strip_code_blocks, strip_markdown_links, split_markdown_protected
+from local_first_common.db import resolve_sync_path
 
 from .cache import get_cached_summary, init_cache, save_summary
-from .posts import chunk_paragraphs, is_valid_post, read_post, slug_from_path, slugify, strip_code_blocks, strip_markdown_links
+from .posts import chunk_paragraphs, is_valid_post, read_post, slug_from_path, slugify
 from .prompts import (
     AUDIT_SYSTEM,
     DRAFT_SYSTEM,
@@ -37,30 +38,6 @@ from .prompts import (
 from .schema import DraftLinkSuggestion, LinkSuggestion, PostSummary
 
 _TOOL = register_tool("series-cross-link-suggester")
-
-def resolve_cache_path(custom_path: Optional[str] = None) -> str:
-    """Resolve the cache database path, handling migration from local folder."""
-    if custom_path:
-        return str(Path(custom_path).expanduser())
-    
-    if env := os.environ.get("CROSS_LINK_CACHE"):
-        return str(Path(env).expanduser())
-    
-    # Default sync path
-    sync_path = Path("~/sync/series-cross-link-suggester/cross-link-cache.db").expanduser()
-    
-    # Migration logic
-    local_path = Path(".cross-link-cache.db")
-    if local_path.exists() and not sync_path.exists():
-        try:
-            sync_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(local_path, sync_path)
-            typer.echo(f"  [migration] Moved existing cache to {sync_path}")
-        except Exception as e:
-            typer.echo(f"  [migration] Failed to move cache: {e}", err=True)
-            return str(local_path)
-            
-    return str(sync_path)
 
 app = typer.Typer(help=__doc__)
 
@@ -171,9 +148,10 @@ def _format_draft_suggestions(post_path: Path, paragraph_suggestions: list[tuple
             try:
                 ds = DraftLinkSuggestion(**s) if isinstance(s, dict) else s
                 lines.append(
-                    f"  → [[{ds.target_slug}]] — anchor: \"{ds.suggested_anchor_text}\""
-                    f" ({ds.placement_hint})"
+                    f"  → [[{ds.target_slug}]]"
                 )
+                lines.append(f"    Anchor: \"{ds.anchor_text}\"")
+                lines.append(f"    Reason: {ds.reason}")
             except Exception:
                 continue
         lines.append("")
@@ -214,11 +192,29 @@ def draft(
         bool,
         typer.Option("--debug", "-d", help="Show raw prompts and LLM responses."),
     ] = False,
+    apply: Annotated[
+        bool,
+        typer.Option("--apply", "-a", help="Surgically insert suggested links into the draft file."),
+    ] = False,
+    link_format: Annotated[
+        str,
+        typer.Option("--format", "-f", help="Link format: 'wiki' for [[slug]] or 'markdown' for [Title](/blog/slug/)"),
+    ] = "markdown",
+    url_prefix: Annotated[
+        str,
+        typer.Option("--url-prefix", help="URL prefix for markdown links (e.g. /blog/ or /posts/)"),
+    ] = os.environ.get("URL_PREFIX", "/blog/"),
 ):
     """Surface cross-link candidates from existing series content for a draft post."""
 
     dry_run = resolve_dry_run(dry_run, no_llm)
-    cache_path = resolve_cache_path(cache)
+    cache_path = str(resolve_sync_path(
+        "series-cross-link-suggester", 
+        "cross-link-cache.db", 
+        env_var="CROSS_LINK_CACHE", 
+        local_migration_path=".cross-link-cache.db",
+        custom_path=cache
+    ))
 
     post_path = Path(post)
     if not post_path.exists():
@@ -254,6 +250,10 @@ def draft(
         typer.echo("No series posts found to compare against.")
         raise typer.Exit(1)
 
+    # Map slug to summary for URL generation and validation
+    slug_to_summary = {s["slug"]: s for s in all_summaries}
+    known_slugs = set(slug_to_summary)
+
     # Chunk the draft and get suggestions per paragraph
     _, body, _ = read_post(post_path)
     paragraphs = chunk_paragraphs(body)
@@ -261,26 +261,74 @@ def draft(
         typer.echo(f"\nAnalysing {len(paragraphs)} paragraphs in {post_path.name} ...")
 
     paragraph_suggestions: list[tuple[str, list]] = []
+    all_apply_details = []
+
     for para in paragraphs:
         with timed_run("series-cross-link-suggester", llm.model, source_location=str(post_path)) as run:
             prompt = build_draft_prompt(para, all_summaries)
             if debug:
                 typer.echo(f"\n[debug] Draft prompt:\n{prompt}\n")
+            
             raw = llm.complete(DRAFT_SYSTEM, prompt)
             if debug:
                 typer.echo(f"[debug] Response: {raw}")
+            
             suggestions = parse_json_response(raw)
             if not isinstance(suggestions, list):
                 suggestions = []
+            
+            # Validation: anchor and context must exist in paragraph (outside code/links)
+            valid_for_para = []
+            para_clean = strip_markdown_links(strip_code_blocks(para))
+            
+            for s in suggestions:
+                try:
+                    ds = DraftLinkSuggestion(**s) if isinstance(s, dict) else s
+                    if ds.target_slug not in known_slugs:
+                        continue
+                    if ds.anchor_text not in para_clean:
+                        if verbose:
+                            typer.echo(f"    ! Dropping anchor (already linked or in code block): \"{ds.anchor_text}\"")
+                        continue
+                    if ds.context_phrase not in para:
+                        continue
+                    
+                    valid_for_para.append(ds)
+                    
+                    # Prepare for apply
+                    summary = slug_to_summary[ds.target_slug]
+                    if link_format == "markdown":
+                        prefix = url_prefix if url_prefix.endswith("/") else f"{url_prefix}/"
+                        if summary.get("series_slug"):
+                            url = f"{prefix}{summary['series_slug']}/{ds.target_slug}/"
+                        else:
+                            url = f"{prefix}{ds.target_slug}/"
+                        replacement = f"[{ds.anchor_text}]({url})"
+                    else:
+                        replacement = f"[[{ds.target_slug}]]"
+                        
+                    all_apply_details.append({
+                        "anchor": ds.anchor_text,
+                        "context": ds.context_phrase,
+                        "replacement": replacement
+                    })
+                except Exception:
+                    continue
             
             run.item_count = 1
             run.input_tokens = getattr(llm, "input_tokens", None) or None
             run.output_tokens = getattr(llm, "output_tokens", None) or None
             
-            paragraph_suggestions.append((para, suggestions))
+            paragraph_suggestions.append((para, valid_for_para))
 
     output = _format_draft_suggestions(post_path, paragraph_suggestions)
     typer.echo(output)
+
+    if apply and all_apply_details:
+        if _apply_links_to_file(post_path, all_apply_details):
+            typer.echo(f"\nApplied {len(all_apply_details)} links to {post_path.name}")
+        else:
+            typer.echo("\nNo changes made (anchors not found in body).")
 
     total = sum(len(s) for _, s in paragraph_suggestions)
     typer.echo(f"\nDone. Processed: {len(paragraphs)} paragraphs, Suggestions: {total}")
@@ -334,7 +382,13 @@ def audit(
     """Batch-scan a post archive and produce a cross-link checklist report."""
 
     dry_run = resolve_dry_run(dry_run, no_llm)
-    cache_path = resolve_cache_path(cache)
+    cache_path = str(resolve_sync_path(
+        "series-cross-link-suggester", 
+        "cross-link-cache.db", 
+        env_var="CROSS_LINK_CACHE", 
+        local_migration_path=".cross-link-cache.db",
+        custom_path=cache
+    ))
 
     series_path = Path(series_dir)
     if not series_path.is_dir():
@@ -457,7 +511,7 @@ def _apply_links_to_file(file_path: Path, link_details: list[dict]) -> bool:
 
     # Split body into chunks: [text, protected, text, protected, ...]
     # Protected elements: fenced code, inline code, markdown links, wiki links
-    body_chunks = re.split(r"(```.*?```|`[^`]+`|\[[^\]]+\]\([^)]+\)|\[\[[^\]]+\]\])", body, flags=re.DOTALL)
+    body_chunks = split_markdown_protected(body)
     
     modified = False
     for detail in link_details:

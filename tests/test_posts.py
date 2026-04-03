@@ -2,7 +2,8 @@
 
 from pathlib import Path
 
-from cross_link.posts import chunk_paragraphs, is_valid_post, read_post, slug_from_path, strip_code_blocks
+from local_first_common.text import strip_code_blocks
+from cross_link.posts import chunk_paragraphs, is_valid_post, read_post, slug_from_path
 
 
 class TestSlugFromPath:

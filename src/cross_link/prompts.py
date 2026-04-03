@@ -41,10 +41,18 @@ Given a paragraph from a draft and summaries of published posts, suggest which p
 Each post in the list is formatted as:
   [SLUG] Title — description
 
-Return ONLY a JSON array (empty [] if no good matches) where each item has:
+Return ONLY a JSON array where each item has:
 - target_slug: the SLUG value only (the text inside [brackets]), nothing else
-- suggested_anchor_text: 1-5 words from the paragraph that would be the link text (string)
-- placement_hint: brief note on exactly where in the paragraph to place the link (string)"""
+- anchor_text: a specific phrase (1-5 words) from the paragraph that should become the link.
+- context_phrase: the full sentence from the paragraph that contains the anchor_text.
+- reason: one sentence explaining why this link adds value (string)
+
+Rules:
+- anchor_text MUST exist EXACTLY as written within the paragraph (case-sensitive).
+- context_phrase MUST exist EXACTLY as written within the paragraph (case-sensitive).
+- DO NOT paraphrase or summarize. Use DIRECT QUOTES ONLY.
+- target_slug must be copied exactly from [SLUG] — do not include the title or description.
+- Return an empty array [] if no strong matches exist."""
 
 
 def build_summary_prompt(content: str) -> str:

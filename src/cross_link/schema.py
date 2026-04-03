@@ -21,5 +21,6 @@ class LinkSuggestion(BaseModel):
 
 class DraftLinkSuggestion(BaseModel):
     target_slug: str = Field(description="Slug of the post to link to")
-    suggested_anchor_text: str = Field(description="1-5 words from the paragraph to use as anchor text")
-    placement_hint: str = Field(description="Brief note on where to insert the link")
+    anchor_text: str = Field(description="The specific phrase from the paragraph to use as anchor text for the link")
+    context_phrase: str = Field(description="The full sentence from the paragraph that contains the anchor_text")
+    reason: str = Field(description="One sentence explaining why this link adds value")

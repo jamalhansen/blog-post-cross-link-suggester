@@ -29,9 +29,10 @@ MOCK_AUDIT_SUGGESTIONS = json.dumps([
 
 MOCK_DRAFT_SUGGESTIONS = json.dumps([
     {
-        "target_slug": "intro-to-sql",
-        "suggested_anchor_text": "SELECT statement",
-        "placement_hint": "after 'SELECT statement' in the first sentence",
+        "target_slug": "sql-joins",
+        "anchor_text": "aggregate functions",
+        "context_phrase": "Unlike aggregate functions, window functions do not collapse rows into a single output row.",
+        "reason": "Useful comparison for readers."
     }
 ])
 
@@ -50,15 +51,11 @@ DRAFT_POST_CONTENT = """---
 title: Advanced Window Functions
 ---
 
-Window functions allow you to perform calculations across a set of table rows that are related
-to the current row. Unlike aggregate functions, window functions do not collapse rows into a
-single output row. This makes them incredibly useful for running totals, rankings, and moving
-averages.
+Window functions allow you to perform calculations across a set of table rows that are related to the current row. Unlike aggregate functions, window functions do not collapse rows into a single output row. This makes them incredibly useful for running totals, rankings, and moving averages.
 
-The OVER clause is what defines the window. You can use PARTITION BY to divide the result set
-into groups, and ORDER BY to define the order within each partition. This gives you tremendous
-flexibility for analytical queries.
+The OVER clause is what defines the window. You can use PARTITION BY to divide the result set into groups, and ORDER BY to define the order within each partition. This gives you tremendous control over your data analysis.
 """
+
 
 
 def _make_series(tmp_path: Path, content: str = SERIES_POST_CONTENT) -> Path:
