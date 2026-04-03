@@ -58,8 +58,13 @@ def _extract_summary(provider, post_path: Path, slug: str, cache_path: str, verb
         series_name = series[0] if isinstance(series, list) else series
         series_slug = slugify(series_name)
 
-    raw = provider.complete(SUMMARY_SYSTEM, build_summary_prompt(body))
-    data = parse_json_response(raw)
+    with timed_run("series-cross-link-suggester", provider.model, source_location=slug) as run:
+        raw = provider.complete(SUMMARY_SYSTEM, build_summary_prompt(body))
+        data = parse_json_response(raw)
+        run.item_count = 1
+        run.input_tokens = getattr(provider, "input_tokens", None) or None
+        run.output_tokens = getattr(provider, "output_tokens", None) or None
+
     summary = PostSummary(
         title=data.get("title") or title,
         series_slug=series_slug,
@@ -229,8 +234,8 @@ def draft(
         typer.echo(f"\nAnalysing {len(paragraphs)} paragraphs in {post_path.name} ...")
 
     paragraph_suggestions: list[tuple[str, list]] = []
-    with timed_run("series-cross-link-suggester", llm.model, source_location=str(post_path)) as _tracking:
-        for para in paragraphs:
+    for para in paragraphs:
+        with timed_run("series-cross-link-suggester", llm.model, source_location=str(post_path)) as run:
             prompt = build_draft_prompt(para, all_summaries)
             if debug:
                 typer.echo(f"\n[debug] Draft prompt:\n{prompt}\n")
@@ -240,10 +245,12 @@ def draft(
             suggestions = parse_json_response(raw)
             if not isinstance(suggestions, list):
                 suggestions = []
+            
+            run.item_count = 1
+            run.input_tokens = getattr(llm, "input_tokens", None) or None
+            run.output_tokens = getattr(llm, "output_tokens", None) or None
+            
             paragraph_suggestions.append((para, suggestions))
-        _tracking.item_count = len(paragraphs)
-        _tracking.input_tokens = getattr(llm, "input_tokens", None) or None
-        _tracking.output_tokens = getattr(llm, "output_tokens", None) or None
 
     output = _format_draft_suggestions(post_path, paragraph_suggestions)
     typer.echo(output)
@@ -342,15 +349,15 @@ def audit(
     typer.echo(f"\nPhase 2: Finding opportunities for {len(target_posts)} posts ...")
     opportunities: list[dict] = []
     skipped = 0
-    with timed_run("series-cross-link-suggester", llm.model, source_location=str(series_path)) as _tracking:
-        for p in target_posts:
-            slug = slug_from_path(p)
-            title = next((s["title"] for s in all_summaries if s["slug"] == slug), slug)
-            _, content, _ = read_post(p)
+    for p in target_posts:
+        slug = slug_from_path(p)
+        title = next((s["title"] for s in all_summaries if s["slug"] == slug), slug)
+        _, content, _ = read_post(p)
 
-            if verbose:
-                typer.echo(f"  [finding] {slug} ...")
+        if verbose:
+            typer.echo(f"  [finding] {slug} ...")
 
+        with timed_run("series-cross-link-suggester", llm.model, source_location=slug) as run:
             prompt = build_audit_prompt(slug, title, content, all_summaries)
             if debug:
                 typer.echo(f"\n[debug] Audit prompt for {slug}:\n{prompt}\n")
@@ -362,15 +369,16 @@ def audit(
                 suggestions = parse_json_response(raw)
                 if not isinstance(suggestions, list):
                     suggestions = []
+                
+                run.item_count = 1
+                run.input_tokens = getattr(llm, "input_tokens", None) or None
+                run.output_tokens = getattr(llm, "output_tokens", None) or None
             except Exception as e:
                 typer.echo(f"  Warning: failed for {slug}: {e}", err=True)
                 suggestions = []
                 skipped += 1
 
-            opportunities.append({"post_slug": slug, "post_title": title, "suggestions": suggestions})
-        _tracking.item_count = len(target_posts) - skipped
-        _tracking.input_tokens = getattr(llm, "input_tokens", None) or None
-        _tracking.output_tokens = getattr(llm, "output_tokens", None) or None
+        opportunities.append({"post_slug": slug, "post_title": title, "suggestions": suggestions})
 
     # Generate report
     report_text = _format_audit_report(opportunities, all_summaries, link_format, url_prefix)
