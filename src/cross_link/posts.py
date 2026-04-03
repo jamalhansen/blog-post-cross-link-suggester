@@ -47,6 +47,15 @@ def strip_code_blocks(text: str) -> str:
     return text
 
 
+def strip_markdown_links(text: str) -> str:
+    """Remove markdown and wiki links from text."""
+    # Remove markdown links: [anchor](url)
+    text = re.sub(r"\[[^\]]+\]\([^)]+\)", "", text)
+    # Remove wiki links: [[slug]] or [[slug|anchor]]
+    text = re.sub(r"\[\[[^\]]+\]\]", "", text)
+    return text
+
+
 def read_post(path: Path) -> tuple[str, str, dict]:
     """Read a markdown post, returning (title, body_text, metadata).
 

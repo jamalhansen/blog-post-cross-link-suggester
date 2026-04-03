@@ -24,7 +24,7 @@ from local_first_common.providers import PROVIDERS
 from local_first_common.tracking import register_tool, timed_run
 
 from .cache import get_cached_summary, init_cache, save_summary
-from .posts import chunk_paragraphs, is_valid_post, read_post, slug_from_path, slugify, strip_code_blocks
+from .posts import chunk_paragraphs, is_valid_post, read_post, slug_from_path, slugify, strip_code_blocks, strip_markdown_links
 from .prompts import (
     AUDIT_SYSTEM,
     DRAFT_SYSTEM,
@@ -371,19 +371,19 @@ def audit(
                 if not isinstance(suggestions, list):
                     suggestions = []
                 
-                # Validation: anchor and context must exist in content (outside code blocks)
-                content_no_code = strip_code_blocks(content)
+                # Validation: anchor and context must exist in content (outside code blocks and existing links)
+                content_clean = strip_markdown_links(strip_code_blocks(content))
                 valid_for_post = []
                 for s in suggestions:
                     try:
                         ls = LinkSuggestion(**s)
-                        if ls.anchor_text not in content_no_code:
+                        if ls.anchor_text not in content_clean:
                             if verbose:
-                                typer.echo(f"    ! Dropping anchor (not found outside code blocks): \"{ls.anchor_text}\"")
+                                typer.echo(f"    ! Dropping anchor (already linked or in code block): \"{ls.anchor_text}\"")
                             continue
-                        if ls.context_phrase not in content_no_code:
+                        if ls.context_phrase not in content:
                             if verbose:
-                                typer.echo(f"    ! Dropping context (not found outside code blocks): \"{ls.context_phrase}\"")
+                                typer.echo(f"    ! Dropping context (not found in content): \"{ls.context_phrase}\"")
                             continue
                         valid_for_post.append(ls.model_dump())
                     except Exception:
@@ -428,27 +428,24 @@ def _apply_links_to_file(file_path: Path, link_details: list[dict]) -> bool:
         header = f"---{parts[1]}---"
         body = parts[2]
 
-    # Split body into chunks: [text, code, text, code, ...]
-    # We use a regex that captures the code blocks to keep them in the split results
-    body_chunks = re.split(r"(```.*?```)", body, flags=re.DOTALL)
+    # Split body into chunks: [text, protected, text, protected, ...]
+    # Protected elements: fenced code, inline code, markdown links, wiki links
+    body_chunks = re.split(r"(```.*?```|`[^`]+`|\[[^\]]+\]\([^)]+\)|\[\[[^\]]+\]\])", body, flags=re.DOTALL)
     
     modified = False
     for detail in link_details:
         anchor = detail["anchor"]
-        context = detail["context"]
         replacement = detail["replacement"]
 
         # Only search and replace in the text chunks (indices 0, 2, 4...)
         for i in range(0, len(body_chunks), 2):
             text_chunk = body_chunks[i]
             
-            if context in text_chunk:
-                new_chunk = text_chunk.replace(anchor, replacement, 1)
-                if new_chunk != text_chunk:
-                    body_chunks[i] = new_chunk
-                    modified = True
-                    break # Link applied for this detail
-            elif anchor in text_chunk:
+            # Note: since we split by links, the 'context' (sentence) might be split
+            # across multiple chunks. However, if the anchor is in a text chunk, 
+            # we can still safely replace it there.
+            
+            if anchor in text_chunk:
                 new_chunk = text_chunk.replace(anchor, replacement, 1)
                 if new_chunk != text_chunk:
                     body_chunks[i] = new_chunk
