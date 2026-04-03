@@ -32,6 +32,7 @@ MOCK_DRAFT_SUGGESTIONS = json.dumps([
         "target_slug": "sql-joins",
         "anchor_text": "aggregate functions",
         "context_phrase": "Unlike aggregate functions, window functions do not collapse rows into a single output row.",
+        "placement": "body",
         "reason": "Useful comparison for readers."
     }
 ])

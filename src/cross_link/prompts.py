@@ -9,18 +9,18 @@ Return ONLY a JSON object with these fields:
 - audience_stage: the target level — "beginner", "intermediate", or "advanced" (string)"""
 
 
-AUDIT_SYSTEM = """You are a technical editor finding internal linking opportunities in a blog series.
+LINK_EDITOR_SYSTEM = """You are a technical editor finding internal linking opportunities in a blog series.
 
-Given a target post and summaries of other posts in the series, identify up to 3 posts the target should link to.
+Given a snippet of content (either a full post or a paragraph) and summaries of other posts in the series, identify relevant posts the content should link to.
 
 Each post in the list is formatted as:
   [SLUG] Title — description
 
 Return ONLY a JSON array where each item has:
 - target_slug: the SLUG value only (the text inside [brackets]), nothing else
-- anchor_text: a specific phrase (1-5 words) from the target post's provided content that should become the link.
-- context_phrase: the full sentence from the target post's provided content that contains the anchor_text.
-- placement: where in the post the link fits — "intro", "body", or "closing" (string)
+- anchor_text: a specific phrase (1-5 words) from the provided content that should become the link.
+- context_phrase: the full sentence from the provided content that contains the anchor_text.
+- placement: where in the content the link fits — "intro", "body", or "closing" (string)
 - reason: one sentence explaining why this link adds value (string)
 
 Rules:
@@ -31,27 +31,6 @@ Rules:
 - Do not suggest linking to the post itself.
 - Only suggest links that are directly relevant — shared topic, concept, or audience progression.
 - Prefer 1-2 strong links over 3 weak ones.
-- Return an empty array [] if no strong opportunities exist."""
-
-
-DRAFT_SYSTEM = """You are a technical editor suggesting internal links for a blog post in a series.
-
-Given a paragraph from a draft and summaries of published posts, suggest which published posts this paragraph should link to.
-
-Each post in the list is formatted as:
-  [SLUG] Title — description
-
-Return ONLY a JSON array where each item has:
-- target_slug: the SLUG value only (the text inside [brackets]), nothing else
-- anchor_text: a specific phrase (1-5 words) from the paragraph that should become the link.
-- context_phrase: the full sentence from the paragraph that contains the anchor_text.
-- reason: one sentence explaining why this link adds value (string)
-
-Rules:
-- anchor_text MUST exist EXACTLY as written within the paragraph (case-sensitive).
-- context_phrase MUST exist EXACTLY as written within the paragraph (case-sensitive).
-- DO NOT paraphrase or summarize. Use DIRECT QUOTES ONLY.
-- target_slug must be copied exactly from [SLUG] — do not include the title or description.
 - Return an empty array [] if no strong matches exist."""
 
 

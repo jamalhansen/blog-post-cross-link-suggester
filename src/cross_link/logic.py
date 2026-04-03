@@ -28,8 +28,7 @@ from local_first_common.db import resolve_sync_path
 from .cache import get_cached_summary, init_cache, save_summary
 from .posts import chunk_paragraphs, is_valid_post, read_post, slug_from_path, slugify
 from .prompts import (
-    AUDIT_SYSTEM,
-    DRAFT_SYSTEM,
+    LINK_EDITOR_SYSTEM,
     SUMMARY_SYSTEM,
     build_audit_prompt,
     build_draft_prompt,
@@ -269,7 +268,7 @@ def draft(
             if debug:
                 typer.echo(f"\n[debug] Draft prompt:\n{prompt}\n")
             
-            raw = llm.complete(DRAFT_SYSTEM, prompt)
+            raw = llm.complete(LINK_EDITOR_SYSTEM, prompt)
             if debug:
                 typer.echo(f"[debug] Response: {raw}")
             
@@ -445,7 +444,7 @@ def audit(
                 typer.echo(f"\n[debug] Audit prompt for {slug}:\n{prompt}\n")
 
             try:
-                raw = llm.complete(AUDIT_SYSTEM, prompt)
+                raw = llm.complete(LINK_EDITOR_SYSTEM, prompt)
                 if debug:
                     typer.echo(f"[debug] Response: {raw}")
                 suggestions = parse_json_response(raw)
