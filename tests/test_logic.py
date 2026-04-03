@@ -229,6 +229,7 @@ class TestAuditCommandWithMock:
         # Should contain checklist items
         assert "- [ ] Link to sql-joins" in report_text
         assert "Anchor: \"JOIN\"" in report_text
+        assert "Suggested: [JOIN](/blog/sql-joins/)" in report_text
         assert "placement:" in report_text
         assert "Reason:" in report_text
 
@@ -361,3 +362,40 @@ class TestAuditCommandWithMock:
         second_run_calls = len(provider2.calls)
         # Second run should make fewer or equal calls (summary calls should be cached)
         assert second_run_calls <= first_run_calls
+
+    def test_audit_custom_url_prefix(self, tmp_path):
+        """Test that --url-prefix correctly overrides the default."""
+        series = _make_series(tmp_path)
+        db = str(tmp_path / "cache.db")
+        output_path = str(tmp_path / "report.md")
+
+        from local_first_common.testing import MockProvider
+
+        call_idx = 0
+        responses = [
+            MOCK_SUMMARY_RESPONSE,
+            MOCK_SUMMARY_RESPONSE,
+            MOCK_AUDIT_SUGGESTIONS,
+            MOCK_AUDIT_SUGGESTIONS,
+        ]
+        provider = MockProvider(response=MOCK_SUMMARY_RESPONSE)
+
+        def rotating_complete(system, user):
+            nonlocal call_idx
+            resp = responses[min(call_idx, len(responses) - 1)]
+            call_idx += 1
+            provider.calls.append((system, user))
+            return resp
+
+        provider.complete = rotating_complete
+
+        with patch("cross_link.logic.resolve_provider", return_value=provider):
+            runner.invoke(app, [
+                "audit", str(series),
+                "--cache", db,
+                "--output", output_path,
+                "--url-prefix", "/posts/",
+            ])
+
+        report_text = Path(output_path).read_text()
+        assert "Suggested: [JOIN](/posts/sql-joins/)" in report_text

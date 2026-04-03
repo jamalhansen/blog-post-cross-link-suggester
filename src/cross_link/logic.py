@@ -71,7 +71,12 @@ def _extract_summary(provider, post_path: Path, slug: str, cache_path: str, verb
     return {"slug": slug, **summary.model_dump()}
 
 
-def _format_audit_report(opportunities: list[dict], all_summaries: list[dict], link_format: str = "markdown") -> str:
+def _format_audit_report(
+    opportunities: list[dict], 
+    all_summaries: list[dict], 
+    link_format: str = "markdown",
+    url_prefix: str = "/blog/"
+) -> str:
     """Render audit results as a markdown checklist report."""
     today = date.today().isoformat()
     lines = ["# Internal Link Opportunity Report", f"Generated: {today}", ""]
@@ -100,10 +105,12 @@ def _format_audit_report(opportunities: list[dict], all_summaries: list[dict], l
         for ls in valid_suggestions:
             summary = slug_to_summary[ls.target_slug]
             if link_format == "markdown":
+                # Ensure prefix ends with /
+                prefix = url_prefix if url_prefix.endswith("/") else f"{url_prefix}/"
                 if summary.get("series_slug"):
-                    url = f"/blog/{summary['series_slug']}/{ls.target_slug}/"
+                    url = f"{prefix}{summary['series_slug']}/{ls.target_slug}/"
                 else:
-                    url = f"/blog/{ls.target_slug}/"
+                    url = f"{prefix}{ls.target_slug}/"
                 link_target = f"[{ls.anchor_text}]({url})"
             else:
                 link_target = f"[[{ls.target_slug}]] (on phrase: \"{ls.anchor_text}\")"
@@ -275,6 +282,10 @@ def audit(
         str,
         typer.Option("--format", "-f", help="Link format: 'wiki' for [[slug]] or 'markdown' for [Title](/blog/slug/)"),
     ] = "markdown",
+    url_prefix: Annotated[
+        str,
+        typer.Option("--url-prefix", help="URL prefix for markdown links (e.g. /blog/ or /posts/)"),
+    ] = os.environ.get("URL_PREFIX", "/blog/"),
     dry_run: bool = dry_run_option(),
     no_llm: bool = no_llm_option(),
     verbose: Annotated[
@@ -362,7 +373,7 @@ def audit(
         _tracking.output_tokens = getattr(llm, "output_tokens", None) or None
 
     # Generate report
-    report_text = _format_audit_report(opportunities, all_summaries, link_format)
+    report_text = _format_audit_report(opportunities, all_summaries, link_format, url_prefix)
     output_path = Path(output) if output else Path(f"link-opportunities-{date.today().isoformat()}.md")
 
     output_path.write_text(report_text, encoding="utf-8")
