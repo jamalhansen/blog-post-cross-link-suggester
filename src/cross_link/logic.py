@@ -7,6 +7,7 @@ Two modes:
 
 import os
 import re
+import shutil
 from datetime import date
 from pathlib import Path
 from typing import Annotated, Optional
@@ -36,6 +37,30 @@ from .prompts import (
 from .schema import DraftLinkSuggestion, LinkSuggestion, PostSummary
 
 _TOOL = register_tool("series-cross-link-suggester")
+
+def resolve_cache_path(custom_path: Optional[str] = None) -> str:
+    """Resolve the cache database path, handling migration from local folder."""
+    if custom_path:
+        return str(Path(custom_path).expanduser())
+    
+    if env := os.environ.get("CROSS_LINK_CACHE"):
+        return str(Path(env).expanduser())
+    
+    # Default sync path
+    sync_path = Path("~/sync/series-cross-link-suggester/cross-link-cache.db").expanduser()
+    
+    # Migration logic
+    local_path = Path(".cross-link-cache.db")
+    if local_path.exists() and not sync_path.exists():
+        try:
+            sync_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(local_path, sync_path)
+            typer.echo(f"  [migration] Moved existing cache to {sync_path}")
+        except Exception as e:
+            typer.echo(f"  [migration] Failed to move cache: {e}", err=True)
+            return str(local_path)
+            
+    return str(sync_path)
 
 app = typer.Typer(help=__doc__)
 
@@ -176,9 +201,9 @@ def draft(
         typer.Option("--model", "-m", help="Override the provider's default model."),
     ] = None,
     cache: Annotated[
-        str,
+        Optional[str],
         typer.Option("--cache", "-c", help="Path to SQLite cache file for series summaries"),
-    ] = ".cross-link-cache.db",
+    ] = None,
     dry_run: bool = dry_run_option(),
     no_llm: bool = no_llm_option(),
     verbose: Annotated[
@@ -193,6 +218,7 @@ def draft(
     """Surface cross-link candidates from existing series content for a draft post."""
 
     dry_run = resolve_dry_run(dry_run, no_llm)
+    cache_path = resolve_cache_path(cache)
 
     post_path = Path(post)
     if not post_path.exists():
@@ -217,11 +243,11 @@ def draft(
         raise typer.Exit(0)
 
     # Build summaries for all series posts
-    init_cache(cache)
+    init_cache(cache_path)
     all_summaries = []
     for p in series_posts:
         slug = slug_from_path(p)
-        summary = _extract_summary(llm, p, slug, cache, verbose)
+        summary = _extract_summary(llm, p, slug, cache_path, verbose)
         all_summaries.append(summary)
 
     if not all_summaries:
@@ -271,9 +297,9 @@ def audit(
         typer.Option("--output", "-o", help="Output report file path (default: link-opportunities-YYYY-MM-DD.md)"),
     ] = "",
     cache: Annotated[
-        str,
+        Optional[str],
         typer.Option("--cache", "-c", help="Path to SQLite cache file for post summaries"),
-    ] = ".cross-link-cache.db",
+    ] = None,
     new_only: Annotated[
         Optional[str],
         typer.Option("--new-only", help="Only find inbound opportunities for this specific post file"),
@@ -308,6 +334,7 @@ def audit(
     """Batch-scan a post archive and produce a cross-link checklist report."""
 
     dry_run = resolve_dry_run(dry_run, no_llm)
+    cache_path = resolve_cache_path(cache)
 
     series_path = Path(series_dir)
     if not series_path.is_dir():
@@ -329,11 +356,11 @@ def audit(
 
     # Phase 1: extract summaries for all posts (with caching)
     typer.echo(f"Phase 1: Extracting summaries for {len(posts)} posts ...")
-    init_cache(cache)
+    init_cache(cache_path)
     all_summaries: list[dict] = []
     for p in posts:
         slug = slug_from_path(p)
-        summary = _extract_summary(llm, p, slug, cache, verbose)
+        summary = _extract_summary(llm, p, slug, cache_path, verbose)
         all_summaries.append(summary)
 
     # Determine which posts to find opportunities for
