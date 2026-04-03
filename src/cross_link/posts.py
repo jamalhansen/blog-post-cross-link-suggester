@@ -37,6 +37,16 @@ def slug_from_path(path: Path) -> str:
     return re.sub(r"^\d+-", "", name)
 
 
+def strip_code_blocks(text: str) -> str:
+    """Remove fenced and inline code blocks from markdown text."""
+    # Remove fenced code blocks (``` ... ```)
+    text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
+    # Remove inline code blocks (` ... `)
+    # We use a non-greedy match to avoid eating everything between first and last `
+    text = re.sub(r"`[^`]+`", "", text)
+    return text
+
+
 def read_post(path: Path) -> tuple[str, str, dict]:
     """Read a markdown post, returning (title, body_text, metadata).
 

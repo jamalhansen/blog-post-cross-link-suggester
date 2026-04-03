@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from cross_link.posts import chunk_paragraphs, is_valid_post, read_post, slug_from_path
+from cross_link.posts import chunk_paragraphs, is_valid_post, read_post, slug_from_path, strip_code_blocks
 
 
 class TestSlugFromPath:
@@ -152,3 +152,19 @@ class TestChunkParagraphs:
         text = "First long enough paragraph.\n\n\n\nSecond long enough paragraph here."
         chunks = chunk_paragraphs(text, min_words=3)
         assert len(chunks) == 2
+
+
+def test_strip_code_blocks():
+    text = """
+    Here is some text.
+    ```python
+    def hello():
+        print("world")
+    ```
+    More text with `inline code` here.
+    """
+    stripped = strip_code_blocks(text)
+    assert "Here is some text." in stripped
+    assert "More text" in stripped
+    assert "def hello" not in stripped
+    assert "inline code" not in stripped

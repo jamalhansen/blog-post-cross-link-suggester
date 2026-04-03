@@ -6,6 +6,7 @@ Two modes:
 """
 
 import os
+import re
 from datetime import date
 from pathlib import Path
 from typing import Annotated, Optional
@@ -23,7 +24,7 @@ from local_first_common.providers import PROVIDERS
 from local_first_common.tracking import register_tool, timed_run
 
 from .cache import get_cached_summary, init_cache, save_summary
-from .posts import chunk_paragraphs, is_valid_post, read_post, slug_from_path, slugify
+from .posts import chunk_paragraphs, is_valid_post, read_post, slug_from_path, slugify, strip_code_blocks
 from .prompts import (
     AUDIT_SYSTEM,
     DRAFT_SYSTEM,
@@ -370,18 +371,19 @@ def audit(
                 if not isinstance(suggestions, list):
                     suggestions = []
                 
-                # Validation: anchor and context must exist in content
+                # Validation: anchor and context must exist in content (outside code blocks)
+                content_no_code = strip_code_blocks(content)
                 valid_for_post = []
                 for s in suggestions:
                     try:
                         ls = LinkSuggestion(**s)
-                        if ls.anchor_text not in content:
+                        if ls.anchor_text not in content_no_code:
                             if verbose:
-                                typer.echo(f"    ! Dropping hallucinated anchor: \"{ls.anchor_text}\"")
+                                typer.echo(f"    ! Dropping anchor (not found outside code blocks): \"{ls.anchor_text}\"")
                             continue
-                        if ls.context_phrase not in content:
+                        if ls.context_phrase not in content_no_code:
                             if verbose:
-                                typer.echo(f"    ! Dropping hallucinated context: \"{ls.context_phrase}\"")
+                                typer.echo(f"    ! Dropping context (not found outside code blocks): \"{ls.context_phrase}\"")
                             continue
                         valid_for_post.append(ls.model_dump())
                     except Exception:
@@ -411,6 +413,7 @@ def audit(
 def _apply_links_to_file(file_path: Path, link_details: list[dict]) -> bool:
     """Insert links into a markdown file based on anchor text.
     link_details is a list of dicts with 'anchor', 'context', and 'replacement'.
+    Only replaces text outside of code blocks.
     """
     raw = file_path.read_text(encoding="utf-8")
     
@@ -425,27 +428,36 @@ def _apply_links_to_file(file_path: Path, link_details: list[dict]) -> bool:
         header = f"---{parts[1]}---"
         body = parts[2]
 
+    # Split body into chunks: [text, code, text, code, ...]
+    # We use a regex that captures the code blocks to keep them in the split results
+    body_chunks = re.split(r"(```.*?```)", body, flags=re.DOTALL)
+    
     modified = False
     for detail in link_details:
         anchor = detail["anchor"]
         context = detail["context"]
         replacement = detail["replacement"]
 
-        if context in body:
-            # First try replacing within the specific context sentence
-            new_context = context.replace(anchor, replacement, 1)
-            if new_context != context:
-                body = body.replace(context, new_context, 1)
-                modified = True
-        elif anchor in body:
-            # Fallback to direct anchor replacement if context not found exactly
-            new_body = body.replace(anchor, replacement, 1)
-            if new_body != body:
-                body = new_body
-                modified = True
+        # Only search and replace in the text chunks (indices 0, 2, 4...)
+        for i in range(0, len(body_chunks), 2):
+            text_chunk = body_chunks[i]
+            
+            if context in text_chunk:
+                new_chunk = text_chunk.replace(anchor, replacement, 1)
+                if new_chunk != text_chunk:
+                    body_chunks[i] = new_chunk
+                    modified = True
+                    break # Link applied for this detail
+            elif anchor in text_chunk:
+                new_chunk = text_chunk.replace(anchor, replacement, 1)
+                if new_chunk != text_chunk:
+                    body_chunks[i] = new_chunk
+                    modified = True
+                    break # Link applied for this detail
 
     if modified:
-        file_path.write_text(f"{header}{body}", encoding="utf-8")
+        new_body = "".join(body_chunks)
+        file_path.write_text(f"{header}{new_body}", encoding="utf-8")
     
     return modified
 
@@ -464,8 +476,6 @@ def apply(
     ] = False,
 ):
     """Apply checked link opportunities from a report file to the actual post files."""
-    import re
-
     report_path = Path(report)
     if not report_path.exists():
         typer.echo(f"Error: Report file not found: {report_path}", err=True)
