@@ -1,3 +1,4 @@
+from local_first_common.config import get_setting
 """Series Cross-Link Suggester — find internal linking opportunities across blog series posts.
 
 Two modes:
@@ -14,6 +15,7 @@ from typing import Annotated, Optional
 import typer
 
 from local_first_common.cli import (
+    init_config_option,
     dry_run_option,
     no_llm_option,
     resolve_provider,
@@ -37,6 +39,8 @@ from .prompts import (
 from .schema import DraftLinkSuggestion, LinkSuggestion, PostSummary
 
 _TOOL = register_tool("series-cross-link-suggester")
+TOOL_NAME = "series-cross-link-suggester"
+DEFAULTS = {"provider": "ollama", "model": "llama3"}
 
 app = typer.Typer(help=__doc__)
 
@@ -231,6 +235,8 @@ def draft(
 
     series_posts = sorted(p for p in series_path.glob("**/*.md") if p != post_path and is_valid_post(p))
 
+    actual_provider = get_setting(TOOL_NAME, "provider", cli_val=provider, default="ollama")
+    actual_model = get_setting(TOOL_NAME, "model", cli_val=model)
     llm = resolve_provider(PROVIDERS, provider, model, no_llm=no_llm, debug=debug)
 
     if dry_run:
@@ -399,6 +405,8 @@ def audit(
         typer.echo(f"No valid markdown posts found in {series_path}", err=True)
         raise typer.Exit(1)
 
+    actual_provider = get_setting(TOOL_NAME, "provider", cli_val=provider, default="ollama")
+    actual_model = get_setting(TOOL_NAME, "model", cli_val=model)
     llm = resolve_provider(PROVIDERS, provider, model, no_llm=no_llm, debug=debug)
 
     if dry_run:
