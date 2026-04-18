@@ -31,3 +31,6 @@ link-opportunities-*.md
 .pytest_cache/
 .ruff_cache/
 .venv/
+
+# Workspace standard ignores
+__pycache__

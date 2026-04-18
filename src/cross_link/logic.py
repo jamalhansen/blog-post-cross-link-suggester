@@ -1,11 +1,3 @@
-from local_first_common.config import get_setting
-"""Series Cross-Link Suggester — find internal linking opportunities across blog series posts.
-
-Two modes:
-  draft   — surface cross-link candidates for a single post being written
-  audit   — batch-scan a full post archive and produce a checklist report
-"""
-
 import os
 import re
 from datetime import date
@@ -20,12 +12,15 @@ from local_first_common.cli import (
     no_llm_option,
     resolve_provider,
     resolve_dry_run,
+    provider_option,
+    model_option,
 )
 from local_first_common.llm import parse_json_response
 from local_first_common.providers import PROVIDERS
 from local_first_common.tracking import register_tool, timed_run
 from local_first_common.text import strip_code_blocks, strip_markdown_links, split_markdown_protected
 from local_first_common.db import resolve_sync_path
+from local_first_common.config import get_setting
 
 from .cache import get_cached_summary, init_cache, save_summary
 from .posts import chunk_paragraphs, is_valid_post, read_post, slug_from_path, slugify
@@ -38,9 +33,9 @@ from .prompts import (
 )
 from .schema import DraftLinkSuggestion, LinkSuggestion, PostSummary
 
-_TOOL = register_tool("series-cross-link-suggester")
 TOOL_NAME = "series-cross-link-suggester"
 DEFAULTS = {"provider": "ollama", "model": "llama3"}
+_TOOL = register_tool(TOOL_NAME)
 
 app = typer.Typer(help=__doc__)
 
@@ -173,10 +168,7 @@ def draft(
         str,
         typer.Option("--series-dir", "-s", help="Directory containing published series posts"),
     ] = os.environ.get("SERIES_DIR", ""),
-    provider: Annotated[
-        str,
-        typer.Option("--provider", "-p", help=f"LLM provider. Choices: {', '.join(PROVIDERS.keys())}"),
-    ] = os.environ.get("MODEL_PROVIDER", "ollama"),
+    provider_name: Annotated[str, provider_option()] = "ollama",
     model: Annotated[
         Optional[str],
         typer.Option("--model", "-m", help="Override the provider's default model."),
@@ -185,8 +177,8 @@ def draft(
         Optional[str],
         typer.Option("--cache", "-c", help="Path to SQLite cache file for series summaries"),
     ] = None,
-    dry_run: bool = dry_run_option(),
-    no_llm: bool = no_llm_option(),
+    dry_run: Annotated[bool, dry_run_option()] = False,
+    no_llm: Annotated[bool, no_llm_option()] = False,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Show extra debug output."),
@@ -207,6 +199,7 @@ def draft(
         str,
         typer.Option("--url-prefix", help="URL prefix for markdown links (e.g. /blog/ or /posts/)"),
     ] = os.environ.get("URL_PREFIX", "/blog/"),
+    init_config: Annotated[bool, init_config_option(TOOL_NAME, DEFAULTS)] = False,
 ):
     """Surface cross-link candidates from existing series content for a draft post."""
 
@@ -235,9 +228,9 @@ def draft(
 
     series_posts = sorted(p for p in series_path.glob("**/*.md") if p != post_path and is_valid_post(p))
 
-    actual_provider = get_setting(TOOL_NAME, "provider", cli_val=provider, default="ollama")
+    actual_provider = get_setting(TOOL_NAME, "provider", cli_val=provider_name, default="ollama")
     actual_model = get_setting(TOOL_NAME, "model", cli_val=model)
-    llm = resolve_provider(PROVIDERS, provider, model, no_llm=no_llm, debug=debug)
+    llm = resolve_provider(PROVIDERS, actual_provider, actual_model, no_llm=no_llm, debug=debug)
 
     if dry_run:
         typer.echo(f"[dry-run] Would analyse {post_path.name} against {len(series_posts)} posts in {series_path}")
@@ -357,14 +350,8 @@ def audit(
         Optional[str],
         typer.Option("--new-only", help="Only find inbound opportunities for this specific post file"),
     ] = None,
-    provider: Annotated[
-        str,
-        typer.Option("--provider", "-p", help=f"LLM provider. Choices: {', '.join(PROVIDERS.keys())}"),
-    ] = os.environ.get("MODEL_PROVIDER", "ollama"),
-    model: Annotated[
-        Optional[str],
-        typer.Option("--model", "-m", help="Override the provider's default model."),
-    ] = None,
+    provider_name: Annotated[str, provider_option()] = "ollama",
+    model: Annotated[Optional[str], model_option()] = None,
     link_format: Annotated[
         str,
         typer.Option("--format", "-f", help="Link format: 'wiki' for [[slug]] or 'markdown' for [Title](/blog/slug/)"),
@@ -373,8 +360,8 @@ def audit(
         str,
         typer.Option("--url-prefix", help="URL prefix for markdown links (e.g. /blog/ or /posts/)"),
     ] = os.environ.get("URL_PREFIX", "/blog/"),
-    dry_run: bool = dry_run_option(),
-    no_llm: bool = no_llm_option(),
+    dry_run: Annotated[bool, dry_run_option()] = False,
+    no_llm: Annotated[bool, no_llm_option()] = False,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Show extra debug output."),
@@ -383,10 +370,11 @@ def audit(
         bool,
         typer.Option("--debug", "-d", help="Show raw prompts and LLM responses."),
     ] = False,
+    init_config: Annotated[bool, init_config_option(TOOL_NAME, DEFAULTS)] = False,
 ):
     """Batch-scan a post archive and produce a cross-link checklist report."""
 
-    dry_run = resolve_dry_run(dry_run, no_llm)
+    actual_provider = get_setting(TOOL_NAME, "provider", cli_val=provider_name, default="ollama")
     cache_path = str(resolve_sync_path(
         "series-cross-link-suggester", 
         "cross-link-cache.db", 
@@ -405,9 +393,8 @@ def audit(
         typer.echo(f"No valid markdown posts found in {series_path}", err=True)
         raise typer.Exit(1)
 
-    actual_provider = get_setting(TOOL_NAME, "provider", cli_val=provider, default="ollama")
     actual_model = get_setting(TOOL_NAME, "model", cli_val=model)
-    llm = resolve_provider(PROVIDERS, provider, model, no_llm=no_llm, debug=debug)
+    llm = resolve_provider(PROVIDERS, actual_provider, actual_model, no_llm=no_llm, debug=debug)
 
     if dry_run:
         typer.echo(f"[dry-run] Would scan {len(posts)} posts in {series_path}")
@@ -506,15 +493,18 @@ def _apply_links_to_file(file_path: Path, link_details: list[dict]) -> bool:
     raw = file_path.read_text(encoding="utf-8")
     
     # Split by frontmatter delimiters
-    parts = raw.split("---", 2)
-    if len(parts) < 3:
-        # No frontmatter or malformed, treat as whole body
+    if raw.startswith("---"):
+        parts = raw.split("---", 3)
+        if len(parts) >= 3:
+            # parts[0] is "", parts[1] is frontmatter, parts[2] is body
+            header = f"---{parts[1]}---\n"
+            body = parts[2]
+        else:
+            header = ""
+            body = raw
+    else:
         header = ""
         body = raw
-    else:
-        # parts[0] is usually empty, parts[1] is frontmatter, parts[2] is body
-        header = f"---{parts[1]}---"
-        body = parts[2]
 
     # Split body into chunks: [text, protected, text, protected, ...]
     # Protected elements: fenced code, inline code, markdown links, wiki links
@@ -529,17 +519,13 @@ def _apply_links_to_file(file_path: Path, link_details: list[dict]) -> bool:
         for i in range(0, len(body_chunks), 2):
             text_chunk = body_chunks[i]
             
-            # Note: since we split by links, the 'context' (sentence) might be split
-            # across multiple chunks. However, if the anchor is in a text chunk, 
-            # we can still safely replace it there.
-            
             if anchor in text_chunk:
                 new_chunk = text_chunk.replace(anchor, replacement, 1)
                 if new_chunk != text_chunk:
                     body_chunks[i] = new_chunk
                     modified = True
                     break # Link applied for this detail
-
+    
     if modified:
         new_body = "".join(body_chunks)
         file_path.write_text(f"{header}{new_body}", encoding="utf-8")
@@ -554,11 +540,12 @@ def apply(
         str,
         typer.Option("--series-dir", "-s", help="Directory containing series posts"),
     ] = os.environ.get("SERIES_DIR", ""),
-    dry_run: bool = dry_run_option(),
+    dry_run: Annotated[bool, dry_run_option()] = False,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Show extra debug output."),
     ] = False,
+    init_config: Annotated[bool, init_config_option(TOOL_NAME, DEFAULTS)] = False,
 ):
     """Apply checked link opportunities from a report file to the actual post files."""
     report_path = Path(report)
@@ -586,18 +573,23 @@ def apply(
     i = 0
     while i < len(lines):
         line = lines[i]
-        source_match = re.match(r"^##\s+(.+)", line)
+        
+        # 1. Match source post heading: ## slug
+        source_match = re.match(r"^##\s*(.+)", line)
         if source_match:
             current_source = source_match.group(1).strip()
             i += 1
             continue
 
-        link_match = re.search(r"^\s*-\s+\[x\]\s+Link\s+to\s+(.+?)\s+—", line)
+        # 2. Match checked link: - [x] Link to target ...
+        link_match = re.search(r"^\s*[-*+]\s+\[x\]\s+Link\s+to\s+(.+?)\s+[-—]", line)
         if link_match and current_source:
-            # We found a checked link, now look ahead for details
-            detail = {"target": link_match.group(1).strip()}
+            target = link_match.group(1).strip()
+            detail = {"target": target}
             i += 1
-            while i < len(lines) and not lines[i].startswith("##") and not lines[i].strip().startswith("-"):
+            
+            # 3. Consume following detail lines (Anchor, Context, Suggested)
+            while i < len(lines) and not lines[i].startswith("##") and not re.match(r"^\s*[-*+]\s+\[", lines[i]):
                 detail_line = lines[i].strip()
                 if detail_line.startswith("Anchor:"):
                     detail["anchor"] = detail_line.split("Anchor:", 1)[1].strip().strip('"')
@@ -612,6 +604,7 @@ def apply(
                     actions[current_source] = []
                 actions[current_source].append(detail)
             continue
+        
         i += 1
 
     if not actions:
