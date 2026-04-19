@@ -6,9 +6,18 @@ from unittest.mock import patch
 
 from typer.testing import CliRunner
 
-from cross_link.logic import app
+from cross_link.logic import app, CrossLinkError, LLMRunError
 
 runner = CliRunner()
+
+
+class TestTypedErrors:
+    def test_error_hierarchy(self):
+        assert issubclass(LLMRunError, CrossLinkError)
+
+    def test_llm_run_error_message(self):
+        err = LLMRunError("context overflow")
+        assert "context overflow" in str(err)
 
 MOCK_SUMMARY_RESPONSE = json.dumps({
     "title": "Intro to SQL",

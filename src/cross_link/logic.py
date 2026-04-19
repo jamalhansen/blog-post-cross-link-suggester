@@ -40,6 +40,14 @@ _TOOL = register_tool(TOOL_NAME)
 app = typer.Typer(help=__doc__)
 
 
+class CrossLinkError(Exception):
+    """Base typed error for series-cross-link-suggester."""
+
+
+class LLMRunError(CrossLinkError):
+    """Raised when an LLM call fails fatally during cross-link generation."""
+
+
 def _extract_summary(provider, post_path: Path, slug: str, cache_path: str, verbose: bool) -> dict:
     """Return summary dict for a post, using cache if available."""
     cached = get_cached_summary(cache_path, slug, post_path)
@@ -468,6 +476,10 @@ def audit(
                 run.item_count = 1
                 run.input_tokens = getattr(llm, "input_tokens", None) or None
                 run.output_tokens = getattr(llm, "output_tokens", None) or None
+            except LLMRunError as e:
+                typer.echo(f"  Warning: failed for {slug}: {e}", err=True)
+                suggestions = []
+                skipped += 1
             except Exception as e:
                 typer.echo(f"  Warning: failed for {slug}: {e}", err=True)
                 suggestions = []
