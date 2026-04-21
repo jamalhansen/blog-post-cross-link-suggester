@@ -19,32 +19,39 @@ class TestTypedErrors:
         err = LLMRunError("context overflow")
         assert "context overflow" in str(err)
 
-MOCK_SUMMARY_RESPONSE = json.dumps({
-    "title": "Intro to SQL",
-    "main_topic": "How to write SELECT queries",
-    "key_concepts": ["SELECT", "WHERE", "FROM"],
-    "audience_stage": "beginner",
-})
 
-MOCK_AUDIT_SUGGESTIONS = json.dumps([
+MOCK_SUMMARY_RESPONSE = json.dumps(
     {
-        "target_slug": "sql-joins",
-        "anchor_text": "JOIN",
-        "context_phrase": "When you need to combine data from multiple tables, JOIN is the tool you reach for.",
-        "placement": "body",
-        "reason": "Readers who understand SELECT will naturally want to learn JOIN next.",
+        "title": "Intro to SQL",
+        "main_topic": "How to write SELECT queries",
+        "key_concepts": ["SELECT", "WHERE", "FROM"],
+        "audience_stage": "beginner",
     }
-])
+)
 
-MOCK_DRAFT_SUGGESTIONS = json.dumps([
-    {
-        "target_slug": "sql-joins",
-        "anchor_text": "aggregate functions",
-        "context_phrase": "Unlike aggregate functions, window functions do not collapse rows into a single output row.",
-        "placement": "body",
-        "reason": "Useful comparison for readers."
-    }
-])
+MOCK_AUDIT_SUGGESTIONS = json.dumps(
+    [
+        {
+            "target_slug": "sql-joins",
+            "anchor_text": "JOIN",
+            "context_phrase": "When you need to combine data from multiple tables, JOIN is the tool you reach for.",
+            "placement": "body",
+            "reason": "Readers who understand SELECT will naturally want to learn JOIN next.",
+        }
+    ]
+)
+
+MOCK_DRAFT_SUGGESTIONS = json.dumps(
+    [
+        {
+            "target_slug": "sql-joins",
+            "anchor_text": "aggregate functions",
+            "context_phrase": "Unlike aggregate functions, window functions do not collapse rows into a single output row.",
+            "placement": "body",
+            "reason": "Useful comparison for readers.",
+        }
+    ]
+)
 
 SERIES_POST_CONTENT = """---
 title: SQL Joins Explained
@@ -67,7 +74,6 @@ The OVER clause is what defines the window. You can use PARTITION BY to divide t
 """
 
 
-
 def _make_series(tmp_path: Path, content: str = SERIES_POST_CONTENT) -> Path:
     series = tmp_path / "series"
     series.mkdir()
@@ -87,11 +93,16 @@ class TestDraftCommandWithMock:
         post = _make_draft(tmp_path)
         series = _make_series(tmp_path)
 
-        result = runner.invoke(app, [
-            "draft", str(post),
-            "--series-dir", str(series),
-            "--no-llm",
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "draft",
+                str(post),
+                "--series-dir",
+                str(series),
+                "--no-llm",
+            ],
+        )
 
         assert result.exit_code == 0
         assert "dry-run" in result.output
@@ -101,7 +112,12 @@ class TestDraftCommandWithMock:
         series = _make_series(tmp_path)
         db = str(tmp_path / "cache.db")
 
-        mock_responses = [MOCK_SUMMARY_RESPONSE, MOCK_SUMMARY_RESPONSE, MOCK_DRAFT_SUGGESTIONS, MOCK_DRAFT_SUGGESTIONS]
+        mock_responses = [
+            MOCK_SUMMARY_RESPONSE,
+            MOCK_SUMMARY_RESPONSE,
+            MOCK_DRAFT_SUGGESTIONS,
+            MOCK_DRAFT_SUGGESTIONS,
+        ]
         call_count = 0
 
         def mock_complete(system, user):
@@ -111,12 +127,18 @@ class TestDraftCommandWithMock:
             return resp
 
         from local_first_common.testing import MockProvider
+
         provider = MockProvider(response=MOCK_SUMMARY_RESPONSE)
 
         with patch("cross_link.logic.resolve_provider", return_value=provider):
             # Prime the provider to return different responses per call
             call_idx = 0
-            responses = [MOCK_SUMMARY_RESPONSE, MOCK_SUMMARY_RESPONSE, MOCK_DRAFT_SUGGESTIONS, MOCK_DRAFT_SUGGESTIONS]
+            responses = [
+                MOCK_SUMMARY_RESPONSE,
+                MOCK_SUMMARY_RESPONSE,
+                MOCK_DRAFT_SUGGESTIONS,
+                MOCK_DRAFT_SUGGESTIONS,
+            ]
 
             def rotating_complete(system, user):
                 nonlocal call_idx
@@ -127,11 +149,17 @@ class TestDraftCommandWithMock:
 
             provider.complete = rotating_complete
 
-            result = runner.invoke(app, [
-                "draft", str(post),
-                "--series-dir", str(series),
-                "--cache", db,
-            ])
+            result = runner.invoke(
+                app,
+                [
+                    "draft",
+                    str(post),
+                    "--series-dir",
+                    str(series),
+                    "--cache",
+                    db,
+                ],
+            )
 
         assert result.exit_code == 0
         assert "Cross-link suggestions" in result.output
@@ -144,14 +172,21 @@ class TestDraftCommandWithMock:
         db = str(tmp_path / "cache.db")
 
         from local_first_common.testing import MockProvider
+
         provider = MockProvider(response=MOCK_SUMMARY_RESPONSE)
 
         with patch("cross_link.logic.resolve_provider", return_value=provider):
-            result = runner.invoke(app, [
-                "draft", str(post),
-                "--series-dir", str(empty_series),
-                "--cache", db,
-            ])
+            result = runner.invoke(
+                app,
+                [
+                    "draft",
+                    str(post),
+                    "--series-dir",
+                    str(empty_series),
+                    "--cache",
+                    db,
+                ],
+            )
 
         assert result.exit_code == 1
         assert "No series posts" in result.output
@@ -185,11 +220,17 @@ class TestAuditCommandWithMock:
         provider.complete = rotating_complete
 
         with patch("cross_link.logic.resolve_provider", return_value=provider):
-            result = runner.invoke(app, [
-                "audit", str(series),
-                "--cache", db,
-                "--output", output_path,
-            ])
+            result = runner.invoke(
+                app,
+                [
+                    "audit",
+                    str(series),
+                    "--cache",
+                    db,
+                    "--output",
+                    output_path,
+                ],
+            )
 
         assert result.exit_code == 0
         assert "Report written to" in result.output
@@ -224,16 +265,22 @@ class TestAuditCommandWithMock:
         provider.complete = rotating_complete
 
         with patch("cross_link.logic.resolve_provider", return_value=provider):
-            runner.invoke(app, [
-                "audit", str(series),
-                "--cache", db,
-                "--output", output_path,
-            ])
+            runner.invoke(
+                app,
+                [
+                    "audit",
+                    str(series),
+                    "--cache",
+                    db,
+                    "--output",
+                    output_path,
+                ],
+            )
 
         report_text = Path(output_path).read_text()
         # Should contain checklist items
         assert "- [ ] Link to sql-joins" in report_text
-        assert "Anchor: \"JOIN\"" in report_text
+        assert 'Anchor: "JOIN"' in report_text
         assert "Suggested: [JOIN](/blog/sql-joins/)" in report_text
         assert "placement:" in report_text
         assert "Reason:" in report_text
@@ -263,12 +310,19 @@ class TestAuditCommandWithMock:
         provider.complete = rotating_complete
 
         with patch("cross_link.logic.resolve_provider", return_value=provider):
-            result = runner.invoke(app, [
-                "audit", str(series),
-                "--cache", db,
-                "--output", output_path,
-                "--new-only", str(series / "01-sql-joins.md"),
-            ])
+            result = runner.invoke(
+                app,
+                [
+                    "audit",
+                    str(series),
+                    "--cache",
+                    db,
+                    "--output",
+                    output_path,
+                    "--new-only",
+                    str(series / "01-sql-joins.md"),
+                ],
+            )
 
         assert result.exit_code == 0
         # Only one post scanned
@@ -280,20 +334,24 @@ class TestAuditCommandWithMock:
         db = str(tmp_path / "cache.db")
         output_path = str(tmp_path / "report.md")
 
-        hallucinated = json.dumps([
-            {
-                "target_slug": "sql-joins: SQL Joins Explained — How to combine tables",
-                "placement": "body",
-                "reason": "Relevant to joins",
-            }
-        ])
+        hallucinated = json.dumps(
+            [
+                {
+                    "target_slug": "sql-joins: SQL Joins Explained — How to combine tables",
+                    "placement": "body",
+                    "reason": "Relevant to joins",
+                }
+            ]
+        )
 
         from local_first_common.testing import MockProvider
 
         call_idx = 0
         responses = [
-            MOCK_SUMMARY_RESPONSE, MOCK_SUMMARY_RESPONSE,
-            hallucinated, hallucinated,
+            MOCK_SUMMARY_RESPONSE,
+            MOCK_SUMMARY_RESPONSE,
+            hallucinated,
+            hallucinated,
         ]
         provider = MockProvider(response=MOCK_SUMMARY_RESPONSE)
 
@@ -307,11 +365,17 @@ class TestAuditCommandWithMock:
         provider.complete = rotating_complete
 
         with patch("cross_link.logic.resolve_provider", return_value=provider):
-            runner.invoke(app, [
-                "audit", str(series),
-                "--cache", db,
-                "--output", output_path,
-            ])
+            runner.invoke(
+                app,
+                [
+                    "audit",
+                    str(series),
+                    "--cache",
+                    db,
+                    "--output",
+                    output_path,
+                ],
+            )
 
         report = Path(output_path).read_text()
         # The hallucinated slug should not appear in the report
@@ -347,22 +411,34 @@ class TestAuditCommandWithMock:
         # First run — summaries get cached
         provider1 = make_provider()
         with patch("cross_link.logic.resolve_provider", return_value=provider1):
-            runner.invoke(app, [
-                "audit", str(series),
-                "--cache", db,
-                "--output", output_path,
-            ])
+            runner.invoke(
+                app,
+                [
+                    "audit",
+                    str(series),
+                    "--cache",
+                    db,
+                    "--output",
+                    output_path,
+                ],
+            )
 
         first_run_calls = len(provider1.calls)
 
         # Second run — summaries should be served from cache
         provider2 = make_provider()
         with patch("cross_link.logic.resolve_provider", return_value=provider2):
-            runner.invoke(app, [
-                "audit", str(series),
-                "--cache", db,
-                "--output", output_path,
-            ])
+            runner.invoke(
+                app,
+                [
+                    "audit",
+                    str(series),
+                    "--cache",
+                    db,
+                    "--output",
+                    output_path,
+                ],
+            )
 
         second_run_calls = len(provider2.calls)
         # Second run should make fewer or equal calls (summary calls should be cached)
@@ -395,12 +471,19 @@ class TestAuditCommandWithMock:
         provider.complete = rotating_complete
 
         with patch("cross_link.logic.resolve_provider", return_value=provider):
-            runner.invoke(app, [
-                "audit", str(series),
-                "--cache", db,
-                "--output", output_path,
-                "--url-prefix", "/posts/",
-            ])
+            runner.invoke(
+                app,
+                [
+                    "audit",
+                    str(series),
+                    "--cache",
+                    db,
+                    "--output",
+                    output_path,
+                    "--url-prefix",
+                    "/posts/",
+                ],
+            )
 
         report_text = Path(output_path).read_text()
         assert "Suggested: [JOIN](/posts/sql-joins/)" in report_text

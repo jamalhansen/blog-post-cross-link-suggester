@@ -18,7 +18,11 @@ from local_first_common.cli import (
 from local_first_common.llm import parse_json_response
 from local_first_common.providers import PROVIDERS
 from local_first_common.tracking import register_tool, timed_run
-from local_first_common.text import strip_code_blocks, strip_markdown_links, split_markdown_protected
+from local_first_common.text import (
+    strip_code_blocks,
+    strip_markdown_links,
+    split_markdown_protected,
+)
 from local_first_common.db import resolve_sync_path
 from local_first_common.config import get_setting
 
@@ -48,7 +52,9 @@ class LLMRunError(CrossLinkError):
     """Raised when an LLM call fails fatally during cross-link generation."""
 
 
-def _extract_summary(provider, post_path: Path, slug: str, cache_path: str, verbose: bool) -> dict:
+def _extract_summary(
+    provider, post_path: Path, slug: str, cache_path: str, verbose: bool
+) -> dict:
     """Return summary dict for a post, using cache if available."""
     cached = get_cached_summary(cache_path, slug, post_path)
     if cached:
@@ -60,14 +66,16 @@ def _extract_summary(provider, post_path: Path, slug: str, cache_path: str, verb
         typer.echo(f"  [summarizing] {slug} ...")
 
     title, body, metadata = read_post(post_path)
-    
+
     series = metadata.get("series")
     series_slug = None
     if series:
         series_name = series[0] if isinstance(series, list) else series
         series_slug = slugify(series_name)
 
-    with timed_run("series-cross-link-suggester", provider.model, source_location=slug) as run:
+    with timed_run(
+        "series-cross-link-suggester", provider.model, source_location=slug
+    ) as run:
         raw = provider.complete(SUMMARY_SYSTEM, build_summary_prompt(body))
         data = parse_json_response(raw)
         run.item_count = 1
@@ -86,10 +94,10 @@ def _extract_summary(provider, post_path: Path, slug: str, cache_path: str, verb
 
 
 def _format_audit_report(
-    opportunities: list[dict], 
-    all_summaries: list[dict], 
+    opportunities: list[dict],
+    all_summaries: list[dict],
     link_format: str = "markdown",
-    url_prefix: str = "/blog/"
+    url_prefix: str = "/blog/",
 ) -> str:
     """Render audit results as a markdown checklist report."""
     today = date.today().isoformat()
@@ -127,18 +135,20 @@ def _format_audit_report(
                     url = f"{prefix}{ls.target_slug}/"
                 link_target = f"[{ls.anchor_text}]({url})"
             else:
-                link_target = f"[[{ls.target_slug}]] (on phrase: \"{ls.anchor_text}\")"
-            
+                link_target = f'[[{ls.target_slug}]] (on phrase: "{ls.anchor_text}")'
+
             lines.append(f"- [ ] Link to {ls.target_slug} — placement: {ls.placement}")
-            lines.append(f"      Anchor: \"{ls.anchor_text}\"")
-            lines.append(f"      Context: \"{ls.context_phrase}\"")
+            lines.append(f'      Anchor: "{ls.anchor_text}"')
+            lines.append(f'      Context: "{ls.context_phrase}"')
             lines.append(f"      Suggested: {link_target}")
             lines.append(f"      Reason: {ls.reason}")
         lines.append("")
     return "\n".join(lines)
 
 
-def _format_draft_suggestions(post_path: Path, paragraph_suggestions: list[tuple[str, list]]) -> str:
+def _format_draft_suggestions(
+    post_path: Path, paragraph_suggestions: list[tuple[str, list]]
+) -> str:
     """Render draft mode results as readable terminal output."""
     lines = [f"Cross-link suggestions for: {post_path.name}", ""]
     any_found = False
@@ -153,10 +163,8 @@ def _format_draft_suggestions(post_path: Path, paragraph_suggestions: list[tuple
         for s in suggestions:
             try:
                 ds = DraftLinkSuggestion(**s) if isinstance(s, dict) else s
-                lines.append(
-                    f"  → [[{ds.target_slug}]]"
-                )
-                lines.append(f"    Anchor: \"{ds.anchor_text}\"")
+                lines.append(f"  → [[{ds.target_slug}]]")
+                lines.append(f'    Anchor: "{ds.anchor_text}"')
                 lines.append(f"    Reason: {ds.reason}")
             except Exception:
                 continue
@@ -174,7 +182,9 @@ def draft(
     ],
     series_dir: Annotated[
         str,
-        typer.Option("--series-dir", "-s", help="Directory containing published series posts"),
+        typer.Option(
+            "--series-dir", "-s", help="Directory containing published series posts"
+        ),
     ] = os.environ.get("SERIES_DIR", ""),
     provider_name: Annotated[str, provider_option()] = "ollama",
     model: Annotated[
@@ -183,7 +193,9 @@ def draft(
     ] = None,
     cache: Annotated[
         Optional[str],
-        typer.Option("--cache", "-c", help="Path to SQLite cache file for series summaries"),
+        typer.Option(
+            "--cache", "-c", help="Path to SQLite cache file for series summaries"
+        ),
     ] = None,
     dry_run: Annotated[bool, dry_run_option()] = False,
     no_llm: Annotated[bool, no_llm_option()] = False,
@@ -197,28 +209,41 @@ def draft(
     ] = False,
     apply: Annotated[
         bool,
-        typer.Option("--apply", "-a", help="Surgically insert suggested links into the draft file."),
+        typer.Option(
+            "--apply",
+            "-a",
+            help="Surgically insert suggested links into the draft file.",
+        ),
     ] = False,
     link_format: Annotated[
         str,
-        typer.Option("--format", "-f", help="Link format: 'wiki' for [[slug]] or 'markdown' for [Title](/blog/slug/)"),
+        typer.Option(
+            "--format",
+            "-f",
+            help="Link format: 'wiki' for [[slug]] or 'markdown' for [Title](/blog/slug/)",
+        ),
     ] = "markdown",
     url_prefix: Annotated[
         str,
-        typer.Option("--url-prefix", help="URL prefix for markdown links (e.g. /blog/ or /posts/)"),
+        typer.Option(
+            "--url-prefix",
+            help="URL prefix for markdown links (e.g. /blog/ or /posts/)",
+        ),
     ] = os.environ.get("URL_PREFIX", "/blog/"),
     init_config: Annotated[bool, init_config_option(TOOL_NAME, DEFAULTS)] = False,
 ):
     """Surface cross-link candidates from existing series content for a draft post."""
 
     dry_run = resolve_dry_run(dry_run, no_llm)
-    cache_path = str(resolve_sync_path(
-        "series-cross-link-suggester", 
-        "cross-link-cache.db", 
-        env_var="CROSS_LINK_CACHE", 
-        local_migration_path=".cross-link-cache.db",
-        custom_path=cache
-    ))
+    cache_path = str(
+        resolve_sync_path(
+            "series-cross-link-suggester",
+            "cross-link-cache.db",
+            env_var="CROSS_LINK_CACHE",
+            local_migration_path=".cross-link-cache.db",
+            custom_path=cache,
+        )
+    )
 
     post_path = Path(post)
     if not post_path.exists():
@@ -226,7 +251,9 @@ def draft(
         raise typer.Exit(1)
 
     if not series_dir:
-        typer.echo("Error: --series-dir is required (or set SERIES_DIR env var)", err=True)
+        typer.echo(
+            "Error: --series-dir is required (or set SERIES_DIR env var)", err=True
+        )
         raise typer.Exit(1)
 
     series_path = Path(series_dir)
@@ -234,14 +261,22 @@ def draft(
         typer.echo(f"Error: Series directory not found: {series_path}", err=True)
         raise typer.Exit(1)
 
-    series_posts = sorted(p for p in series_path.glob("**/*.md") if p != post_path and is_valid_post(p))
+    series_posts = sorted(
+        p for p in series_path.glob("**/*.md") if p != post_path and is_valid_post(p)
+    )
 
-    actual_provider = get_setting(TOOL_NAME, "provider", cli_val=provider_name, default="ollama")
+    actual_provider = get_setting(
+        TOOL_NAME, "provider", cli_val=provider_name, default="ollama"
+    )
     actual_model = get_setting(TOOL_NAME, "model", cli_val=model)
-    llm = resolve_provider(PROVIDERS, actual_provider, actual_model, no_llm=no_llm, debug=debug)
+    llm = resolve_provider(
+        PROVIDERS, actual_provider, actual_model, no_llm=no_llm, debug=debug
+    )
 
     if dry_run:
-        typer.echo(f"[dry-run] Would analyse {post_path.name} against {len(series_posts)} posts in {series_path}")
+        typer.echo(
+            f"[dry-run] Would analyse {post_path.name} against {len(series_posts)} posts in {series_path}"
+        )
         raise typer.Exit(0)
 
     # Build summaries for all series posts
@@ -270,23 +305,25 @@ def draft(
     all_apply_details = []
 
     for para in paragraphs:
-        with timed_run("series-cross-link-suggester", llm.model, source_location=str(post_path)) as run:
+        with timed_run(
+            "series-cross-link-suggester", llm.model, source_location=str(post_path)
+        ) as run:
             prompt = build_draft_prompt(para, all_summaries)
             if debug:
                 typer.echo(f"\n[debug] Draft prompt:\n{prompt}\n")
-            
+
             raw = llm.complete(LINK_EDITOR_SYSTEM, prompt)
             if debug:
                 typer.echo(f"[debug] Response: {raw}")
-            
+
             suggestions = parse_json_response(raw)
             if not isinstance(suggestions, list):
                 suggestions = []
-            
+
             # Validation: anchor and context must exist in paragraph (outside code/links)
             valid_for_para = []
             para_clean = strip_markdown_links(strip_code_blocks(para))
-            
+
             for s in suggestions:
                 try:
                     ds = DraftLinkSuggestion(**s) if isinstance(s, dict) else s
@@ -294,17 +331,21 @@ def draft(
                         continue
                     if ds.anchor_text not in para_clean:
                         if verbose:
-                            typer.echo(f"    ! Dropping anchor (already linked or in code block): \"{ds.anchor_text}\"")
+                            typer.echo(
+                                f'    ! Dropping anchor (already linked or in code block): "{ds.anchor_text}"'
+                            )
                         continue
                     if ds.context_phrase not in para:
                         continue
-                    
+
                     valid_for_para.append(ds)
-                    
+
                     # Prepare for apply
                     summary = slug_to_summary[ds.target_slug]
                     if link_format == "markdown":
-                        prefix = url_prefix if url_prefix.endswith("/") else f"{url_prefix}/"
+                        prefix = (
+                            url_prefix if url_prefix.endswith("/") else f"{url_prefix}/"
+                        )
                         if summary.get("series_slug"):
                             url = f"{prefix}{summary['series_slug']}/{ds.target_slug}/"
                         else:
@@ -312,19 +353,21 @@ def draft(
                         replacement = f"[{ds.anchor_text}]({url})"
                     else:
                         replacement = f"[[{ds.target_slug}]]"
-                        
-                    all_apply_details.append({
-                        "anchor": ds.anchor_text,
-                        "context": ds.context_phrase,
-                        "replacement": replacement
-                    })
+
+                    all_apply_details.append(
+                        {
+                            "anchor": ds.anchor_text,
+                            "context": ds.context_phrase,
+                            "replacement": replacement,
+                        }
+                    )
                 except Exception:
                     continue
-            
+
             run.item_count = 1
             run.input_tokens = getattr(llm, "input_tokens", None) or None
             run.output_tokens = getattr(llm, "output_tokens", None) or None
-            
+
             paragraph_suggestions.append((para, valid_for_para))
 
     output = _format_draft_suggestions(post_path, paragraph_suggestions)
@@ -348,25 +391,41 @@ def audit(
     ],
     output: Annotated[
         str,
-        typer.Option("--output", "-o", help="Output report file path (default: link-opportunities-YYYY-MM-DD.md)"),
+        typer.Option(
+            "--output",
+            "-o",
+            help="Output report file path (default: link-opportunities-YYYY-MM-DD.md)",
+        ),
     ] = "",
     cache: Annotated[
         Optional[str],
-        typer.Option("--cache", "-c", help="Path to SQLite cache file for post summaries"),
+        typer.Option(
+            "--cache", "-c", help="Path to SQLite cache file for post summaries"
+        ),
     ] = None,
     new_only: Annotated[
         Optional[str],
-        typer.Option("--new-only", help="Only find inbound opportunities for this specific post file"),
+        typer.Option(
+            "--new-only",
+            help="Only find inbound opportunities for this specific post file",
+        ),
     ] = None,
     provider_name: Annotated[str, provider_option()] = "ollama",
     model: Annotated[Optional[str], model_option()] = None,
     link_format: Annotated[
         str,
-        typer.Option("--format", "-f", help="Link format: 'wiki' for [[slug]] or 'markdown' for [Title](/blog/slug/)"),
+        typer.Option(
+            "--format",
+            "-f",
+            help="Link format: 'wiki' for [[slug]] or 'markdown' for [Title](/blog/slug/)",
+        ),
     ] = "markdown",
     url_prefix: Annotated[
         str,
-        typer.Option("--url-prefix", help="URL prefix for markdown links (e.g. /blog/ or /posts/)"),
+        typer.Option(
+            "--url-prefix",
+            help="URL prefix for markdown links (e.g. /blog/ or /posts/)",
+        ),
     ] = os.environ.get("URL_PREFIX", "/blog/"),
     dry_run: Annotated[bool, dry_run_option()] = False,
     no_llm: Annotated[bool, no_llm_option()] = False,
@@ -382,14 +441,18 @@ def audit(
 ):
     """Batch-scan a post archive and produce a cross-link checklist report."""
 
-    actual_provider = get_setting(TOOL_NAME, "provider", cli_val=provider_name, default="ollama")
-    cache_path = str(resolve_sync_path(
-        "series-cross-link-suggester", 
-        "cross-link-cache.db", 
-        env_var="CROSS_LINK_CACHE", 
-        local_migration_path=".cross-link-cache.db",
-        custom_path=cache
-    ))
+    actual_provider = get_setting(
+        TOOL_NAME, "provider", cli_val=provider_name, default="ollama"
+    )
+    cache_path = str(
+        resolve_sync_path(
+            "series-cross-link-suggester",
+            "cross-link-cache.db",
+            env_var="CROSS_LINK_CACHE",
+            local_migration_path=".cross-link-cache.db",
+            custom_path=cache,
+        )
+    )
 
     series_path = Path(series_dir)
     if not series_path.is_dir():
@@ -402,7 +465,9 @@ def audit(
         raise typer.Exit(1)
 
     actual_model = get_setting(TOOL_NAME, "model", cli_val=model)
-    llm = resolve_provider(PROVIDERS, actual_provider, actual_model, no_llm=no_llm, debug=debug)
+    llm = resolve_provider(
+        PROVIDERS, actual_provider, actual_model, no_llm=no_llm, debug=debug
+    )
 
     if dry_run:
         typer.echo(f"[dry-run] Would scan {len(posts)} posts in {series_path}")
@@ -424,7 +489,10 @@ def audit(
         new_slug = slug_from_path(Path(new_only))
         target_posts = [p for p in posts if slug_from_path(p) == new_slug]
         if not target_posts:
-            typer.echo(f"Error: --new-only post '{new_only}' not found in series directory.", err=True)
+            typer.echo(
+                f"Error: --new-only post '{new_only}' not found in series directory.",
+                err=True,
+            )
             raise typer.Exit(1)
     else:
         target_posts = posts
@@ -441,7 +509,9 @@ def audit(
         if verbose:
             typer.echo(f"  [finding] {slug} ...")
 
-        with timed_run("series-cross-link-suggester", llm.model, source_location=slug) as run:
+        with timed_run(
+            "series-cross-link-suggester", llm.model, source_location=slug
+        ) as run:
             prompt = build_audit_prompt(slug, title, content, all_summaries)
             if debug:
                 typer.echo(f"\n[debug] Audit prompt for {slug}:\n{prompt}\n")
@@ -453,7 +523,7 @@ def audit(
                 suggestions = parse_json_response(raw)
                 if not isinstance(suggestions, list):
                     suggestions = []
-                
+
                 # Validation: anchor and context must exist in content (outside code blocks and existing links)
                 content_clean = strip_markdown_links(strip_code_blocks(content))
                 valid_for_post = []
@@ -462,17 +532,21 @@ def audit(
                         ls = LinkSuggestion(**s)
                         if ls.anchor_text not in content_clean:
                             if verbose:
-                                typer.echo(f"    ! Dropping anchor (already linked or in code block): \"{ls.anchor_text}\"")
+                                typer.echo(
+                                    f'    ! Dropping anchor (already linked or in code block): "{ls.anchor_text}"'
+                                )
                             continue
                         if ls.context_phrase not in content:
                             if verbose:
-                                typer.echo(f"    ! Dropping context (not found in content): \"{ls.context_phrase}\"")
+                                typer.echo(
+                                    f'    ! Dropping context (not found in content): "{ls.context_phrase}"'
+                                )
                             continue
                         valid_for_post.append(ls.model_dump())
                     except Exception:
                         continue
                 suggestions = valid_for_post
-                
+
                 run.item_count = 1
                 run.input_tokens = getattr(llm, "input_tokens", None) or None
                 run.output_tokens = getattr(llm, "output_tokens", None) or None
@@ -485,16 +559,26 @@ def audit(
                 suggestions = []
                 skipped += 1
 
-        opportunities.append({"post_slug": slug, "post_title": title, "suggestions": suggestions})
+        opportunities.append(
+            {"post_slug": slug, "post_title": title, "suggestions": suggestions}
+        )
 
     # Generate report
-    report_text = _format_audit_report(opportunities, all_summaries, link_format, url_prefix)
-    output_path = Path(output) if output else Path(f"link-opportunities-{date.today().isoformat()}.md")
+    report_text = _format_audit_report(
+        opportunities, all_summaries, link_format, url_prefix
+    )
+    output_path = (
+        Path(output)
+        if output
+        else Path(f"link-opportunities-{date.today().isoformat()}.md")
+    )
 
     output_path.write_text(report_text, encoding="utf-8")
     typer.echo(f"\nReport written to: {output_path}")
     total_suggestions = sum(len(o["suggestions"]) for o in opportunities)
-    typer.echo(f"\nDone. Processed: {len(target_posts)}, Skipped: {skipped}, Suggestions: {total_suggestions}")
+    typer.echo(
+        f"\nDone. Processed: {len(target_posts)}, Skipped: {skipped}, Suggestions: {total_suggestions}"
+    )
 
 
 def _apply_links_to_file(file_path: Path, link_details: list[dict]) -> bool:
@@ -503,7 +587,7 @@ def _apply_links_to_file(file_path: Path, link_details: list[dict]) -> bool:
     Only replaces text outside of code blocks.
     """
     raw = file_path.read_text(encoding="utf-8")
-    
+
     # Split by frontmatter delimiters
     if raw.startswith("---"):
         parts = raw.split("---", 3)
@@ -521,7 +605,7 @@ def _apply_links_to_file(file_path: Path, link_details: list[dict]) -> bool:
     # Split body into chunks: [text, protected, text, protected, ...]
     # Protected elements: fenced code, inline code, markdown links, wiki links
     body_chunks = split_markdown_protected(body)
-    
+
     modified = False
     for detail in link_details:
         anchor = detail["anchor"]
@@ -530,18 +614,18 @@ def _apply_links_to_file(file_path: Path, link_details: list[dict]) -> bool:
         # Only search and replace in the text chunks (indices 0, 2, 4...)
         for i in range(0, len(body_chunks), 2):
             text_chunk = body_chunks[i]
-            
+
             if anchor in text_chunk:
                 new_chunk = text_chunk.replace(anchor, replacement, 1)
                 if new_chunk != text_chunk:
                     body_chunks[i] = new_chunk
                     modified = True
-                    break # Link applied for this detail
-    
+                    break  # Link applied for this detail
+
     if modified:
         new_body = "".join(body_chunks)
         file_path.write_text(f"{header}{new_body}", encoding="utf-8")
-    
+
     return modified
 
 
@@ -579,13 +663,13 @@ def apply(
     # Parse checked links: {source_slug: [detail_dicts]}
     actions: dict[str, list[dict]] = {}
     current_source = None
-    
+
     # Simple state machine to parse the new report format
     lines = report_text.splitlines()
     i = 0
     while i < len(lines):
         line = lines[i]
-        
+
         # 1. Match source post heading: ## slug
         source_match = re.match(r"^##\s*(.+)", line)
         if source_match:
@@ -599,24 +683,34 @@ def apply(
             target = link_match.group(1).strip()
             detail = {"target": target}
             i += 1
-            
+
             # 3. Consume following detail lines (Anchor, Context, Suggested)
-            while i < len(lines) and not lines[i].startswith("##") and not re.match(r"^\s*[-*+]\s+\[", lines[i]):
+            while (
+                i < len(lines)
+                and not lines[i].startswith("##")
+                and not re.match(r"^\s*[-*+]\s+\[", lines[i])
+            ):
                 detail_line = lines[i].strip()
                 if detail_line.startswith("Anchor:"):
-                    detail["anchor"] = detail_line.split("Anchor:", 1)[1].strip().strip('"')
+                    detail["anchor"] = (
+                        detail_line.split("Anchor:", 1)[1].strip().strip('"')
+                    )
                 elif detail_line.startswith("Context:"):
-                    detail["context"] = detail_line.split("Context:", 1)[1].strip().strip('"')
+                    detail["context"] = (
+                        detail_line.split("Context:", 1)[1].strip().strip('"')
+                    )
                 elif detail_line.startswith("Suggested:"):
-                    detail["replacement"] = detail_line.split("Suggested:", 1)[1].strip()
+                    detail["replacement"] = detail_line.split("Suggested:", 1)[
+                        1
+                    ].strip()
                 i += 1
-            
+
             if "anchor" in detail and "replacement" in detail:
                 if current_source not in actions:
                     actions[current_source] = []
                 actions[current_source].append(detail)
             continue
-        
+
         i += 1
 
     if not actions:
@@ -630,14 +724,18 @@ def apply(
     modified_count = 0
     for source_slug, link_details in actions.items():
         if source_slug not in slug_to_path_map:
-            typer.echo(f"Warning: Could not find file for slug '{source_slug}'", err=True)
+            typer.echo(
+                f"Warning: Could not find file for slug '{source_slug}'", err=True
+            )
             continue
 
         file_path = slug_to_path_map[source_slug]
         if dry_run:
-            typer.echo(f"[dry-run] Would add {len(link_details)} links to {file_path.name}")
+            typer.echo(
+                f"[dry-run] Would add {len(link_details)} links to {file_path.name}"
+            )
             for d in link_details:
-                typer.echo(f"  + Replace \"{d['anchor']}\" with \"{d['replacement']}\"")
+                typer.echo(f'  + Replace "{d["anchor"]}" with "{d["replacement"]}"')
         else:
             if verbose:
                 typer.echo(f"Applying links to {file_path.name} ...")
