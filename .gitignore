@@ -34,3 +34,4 @@ link-opportunities-*.md
 
 # Workspace standard ignores
 __pycache__
+_NOTES.md
