@@ -1,4 +1,4 @@
-"""Tests for cross_link.logic: draft and audit commands with MockProvider."""
+"""Tests for cross_link.cli: draft and audit commands with MockProvider."""
 
 import json
 from pathlib import Path
@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from typer.testing import CliRunner
 
-from cross_link.logic import app, CrossLinkError, LLMRunError
+from cross_link.cli import app, CrossLinkError, LLMRunError
 
 runner = CliRunner()
 
@@ -130,7 +130,7 @@ class TestDraftCommandWithMock:
 
         provider = MockProvider(response=MOCK_SUMMARY_RESPONSE)
 
-        with patch("cross_link.logic.resolve_provider", return_value=provider):
+        with patch("cross_link.cli.resolve_provider", return_value=provider):
             # Prime the provider to return different responses per call
             call_idx = 0
             responses = [
@@ -175,7 +175,7 @@ class TestDraftCommandWithMock:
 
         provider = MockProvider(response=MOCK_SUMMARY_RESPONSE)
 
-        with patch("cross_link.logic.resolve_provider", return_value=provider):
+        with patch("cross_link.cli.resolve_provider", return_value=provider):
             result = runner.invoke(
                 app,
                 [
@@ -219,7 +219,7 @@ class TestAuditCommandWithMock:
 
         provider.complete = rotating_complete
 
-        with patch("cross_link.logic.resolve_provider", return_value=provider):
+        with patch("cross_link.cli.resolve_provider", return_value=provider):
             result = runner.invoke(
                 app,
                 [
@@ -264,7 +264,7 @@ class TestAuditCommandWithMock:
 
         provider.complete = rotating_complete
 
-        with patch("cross_link.logic.resolve_provider", return_value=provider):
+        with patch("cross_link.cli.resolve_provider", return_value=provider):
             runner.invoke(
                 app,
                 [
@@ -309,7 +309,7 @@ class TestAuditCommandWithMock:
 
         provider.complete = rotating_complete
 
-        with patch("cross_link.logic.resolve_provider", return_value=provider):
+        with patch("cross_link.cli.resolve_provider", return_value=provider):
             result = runner.invoke(
                 app,
                 [
@@ -364,7 +364,7 @@ class TestAuditCommandWithMock:
 
         provider.complete = rotating_complete
 
-        with patch("cross_link.logic.resolve_provider", return_value=provider):
+        with patch("cross_link.cli.resolve_provider", return_value=provider):
             runner.invoke(
                 app,
                 [
@@ -410,7 +410,7 @@ class TestAuditCommandWithMock:
 
         # First run — summaries get cached
         provider1 = make_provider()
-        with patch("cross_link.logic.resolve_provider", return_value=provider1):
+        with patch("cross_link.cli.resolve_provider", return_value=provider1):
             runner.invoke(
                 app,
                 [
@@ -427,7 +427,7 @@ class TestAuditCommandWithMock:
 
         # Second run — summaries should be served from cache
         provider2 = make_provider()
-        with patch("cross_link.logic.resolve_provider", return_value=provider2):
+        with patch("cross_link.cli.resolve_provider", return_value=provider2):
             runner.invoke(
                 app,
                 [
@@ -470,7 +470,7 @@ class TestAuditCommandWithMock:
 
         provider.complete = rotating_complete
 
-        with patch("cross_link.logic.resolve_provider", return_value=provider):
+        with patch("cross_link.cli.resolve_provider", return_value=provider):
             runner.invoke(
                 app,
                 [

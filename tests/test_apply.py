@@ -1,7 +1,7 @@
 """Tests for apply command in cross_link.logic."""
 
 from typer.testing import CliRunner
-from cross_link.logic import app
+from cross_link.cli import app
 
 runner = CliRunner()
 

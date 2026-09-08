@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [project.scripts]
-cross-link = "cross_link.logic:app"
+cross-link = "cross_link.cli:app"
 
 [build-system]
 requires = ["hatchling"]

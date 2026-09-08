@@ -1,4 +1,4 @@
-from cross_link.logic import app
+from cross_link.cli import app
 
 if __name__ == "__main__":
     app()
