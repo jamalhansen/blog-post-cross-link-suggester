@@ -136,7 +136,8 @@ The `audit` command caches post summaries in a SQLite database (default: `.cross
 series-cross-link-suggester/
 ├── src/
 │   └── cross_link/
-│       ├── logic.py      # Typer CLI (draft, audit, and apply commands)
+│       ├── cli.py        # Typer CLI (draft, audit, and apply commands)
+│       ├── core.py       # Core orchestration logic
 │       ├── posts.py      # slug_from_path, read_post, chunk_paragraphs
 │       ├── cache.py      # SQLite summary cache
 │       ├── prompts.py    # LLM prompt builders
