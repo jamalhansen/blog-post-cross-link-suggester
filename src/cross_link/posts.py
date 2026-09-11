@@ -84,7 +84,7 @@ def is_valid_post(path: Path) -> bool:
 
     try:
         title, _, metadata = read_post(path)
-    except Exception:
+    except Exception:  # noqa: BLE001 - a hand-edited post can fail to parse in many ways; treat as not-eligible rather than crash the scan
         return False
 
     # Check title for same keywords
@@ -96,10 +96,7 @@ def is_valid_post(path: Path) -> bool:
         return False
     if metadata.get("status") and str(metadata.get("status")).lower() != "published":
         return False
-    if metadata.get("type") == "index":
-        return False
-
-    return True
+    return metadata.get("type") != "index"
 
 
 def chunk_paragraphs(text: str, min_words: int = 20) -> list[str]:

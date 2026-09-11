@@ -1,48 +1,51 @@
 """Typer CLI for series-cross-link-suggester."""
 
-from datetime import date
 import os
 import re
+from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
-
 from local_first_common.cli import (
-    init_config_option,
     dry_run_option,
-    no_llm_option,
-    resolve_provider,
-    resolve_dry_run,
-    provider_option,
+    init_config_option,
     model_option,
+    no_llm_option,
+    provider_option,
+    resolve_dry_run,
+    resolve_provider,
 )
+from local_first_common.config import get_setting
+from local_first_common.db import resolve_sync_path
 from local_first_common.llm import parse_json_response
 from local_first_common.providers import PROVIDERS
-from local_first_common.tracking import register_tool, timed_run
 from local_first_common.text import (
     strip_code_blocks,
     strip_markdown_links,
 )
-from local_first_common.db import resolve_sync_path
-from local_first_common.config import get_setting
+from local_first_common.tracking import register_tool, timed_run
 
 from .cache import init_cache
+from .injector import _apply_links_to_file
 from .posts import chunk_paragraphs, is_valid_post, read_post, slug_from_path
 from .prompts import (
     LINK_EDITOR_SYSTEM,
     build_audit_prompt,
     build_draft_prompt,
 )
-from .schema import DraftLinkSuggestion, LinkSuggestion
 from .scanner import (
-    CrossLinkError as CrossLinkError,
-    LLMRunError as LLMRunError,
+    CrossLinkError as CrossLinkError,  # noqa: PLC0414 - explicit re-export, relied on by tests importing it from cli, not scanner
+)
+from .scanner import (
+    LLMRunError as LLMRunError,  # noqa: PLC0414 - explicit re-export, relied on by tests importing it from cli, not scanner
+)
+from .scanner import (
     _extract_summary,
     _format_audit_report,
     _format_draft_suggestions,
 )
-from .injector import _apply_links_to_file
+from .schema import DraftLinkSuggestion, LinkSuggestion
 
 TOOL_NAME = "series-cross-link-suggester"
 DEFAULTS = {"provider": "ollama", "model": "llama3"}
@@ -65,11 +68,11 @@ def draft(
     ] = os.environ.get("SERIES_DIR", ""),
     provider_name: Annotated[str, provider_option()] = "ollama",
     model: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--model", "-m", help="Override the provider's default model."),
     ] = None,
     cache: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--cache", "-c", help="Path to SQLite cache file for series summaries"
         ),
@@ -238,7 +241,9 @@ def draft(
                             "replacement": replacement,
                         }
                     )
-                except Exception:
+                except Exception as e:  # noqa: BLE001 - one malformed suggestion shouldn't stop building the rest of the apply list
+                    if verbose:
+                        typer.echo(f"    ! Dropping suggestion (build failed): {e}")
                     continue
 
             run.item_count = 1
@@ -275,20 +280,20 @@ def audit(
         ),
     ] = "",
     cache: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--cache", "-c", help="Path to SQLite cache file for post summaries"
         ),
     ] = None,
     new_only: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--new-only",
             help="Only find inbound opportunities for this specific post file",
         ),
     ] = None,
     provider_name: Annotated[str, provider_option()] = "ollama",
-    model: Annotated[Optional[str], model_option()] = None,
+    model: Annotated[str | None, model_option()] = None,
     link_format: Annotated[
         str,
         typer.Option(
@@ -420,7 +425,9 @@ def audit(
                                 )
                             continue
                         valid_for_post.append(ls.model_dump())
-                    except Exception:
+                    except Exception as e:  # noqa: BLE001 - one malformed suggestion shouldn't stop validating the rest
+                        if verbose:
+                            typer.echo(f"    ! Dropping suggestion (validation failed): {e}")
                         continue
                 suggestions = valid_for_post
 
@@ -431,7 +438,7 @@ def audit(
                 typer.echo(f"  Warning: failed for {slug}: {e}", err=True)
                 suggestions = []
                 skipped += 1
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - top-level per-post boundary: report and skip, don't crash the whole audit run
                 typer.echo(f"  Warning: failed for {slug}: {e}", err=True)
                 suggestions = []
                 skipped += 1
@@ -447,7 +454,7 @@ def audit(
     output_path = (
         Path(output)
         if output
-        else Path(f"link-opportunities-{date.today().isoformat()}.md")
+        else Path(f"link-opportunities-{datetime.now().astimezone().date().isoformat()}.md")
     )
 
     output_path.write_text(report_text, encoding="utf-8")

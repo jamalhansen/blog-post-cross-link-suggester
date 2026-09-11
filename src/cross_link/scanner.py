@@ -1,10 +1,9 @@
 """Cross-link opportunity scanning and report formatting domain logic."""
 
-from datetime import date
+from datetime import datetime
 from pathlib import Path
 
 import typer
-
 from local_first_common.llm import parse_json_response
 from local_first_common.tracking import timed_run
 
@@ -73,7 +72,7 @@ def _format_audit_report(
     url_prefix: str = "/blog/",
 ) -> str:
     """Render audit results as a markdown checklist report."""
-    today = date.today().isoformat()
+    today = datetime.now().astimezone().date().isoformat()
     lines = ["# Internal Link Opportunity Report", f"Generated: {today}", ""]
 
     # Map slug to summary for URL generation and validation
@@ -90,7 +89,8 @@ def _format_audit_report(
                 if ls.target_slug not in known_slugs:
                     continue  # drop hallucinated or malformed slugs
                 valid_suggestions.append(ls)
-            except Exception:
+            except Exception as e:  # noqa: BLE001 - one malformed suggestion shouldn't stop validating the rest
+                typer.echo(f"    ! Dropping malformed suggestion: {e}", err=True)
                 continue
 
         if not valid_suggestions:
@@ -142,7 +142,8 @@ def _format_draft_suggestions(
                 lines.append(f"  → [[{ds.target_slug}]]")
                 lines.append(f'    Anchor: "{ds.anchor_text}"')
                 lines.append(f"    Reason: {ds.reason}")
-            except Exception:
+            except Exception as e:  # noqa: BLE001 - one malformed suggestion shouldn't stop rendering the rest of the report
+                typer.echo(f"    ! Dropping malformed suggestion: {e}", err=True)
                 continue
         lines.append("")
     if not any_found:

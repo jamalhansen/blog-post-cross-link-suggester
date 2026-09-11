@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from local_first_common.text import strip_code_blocks
+
 from cross_link.posts import chunk_paragraphs, is_valid_post, read_post, slug_from_path
 
 
@@ -43,14 +44,14 @@ class TestReadPost:
     def test_falls_back_to_h1(self, tmp_path):
         post = tmp_path / "post.md"
         post.write_text("# H1 Title\n\nSome body text.", encoding="utf-8")
-        title, body, meta = read_post(post)
+        title, _body, meta = read_post(post)
         assert title == "H1 Title"
         assert meta == {}
 
     def test_falls_back_to_slug(self, tmp_path):
         post = tmp_path / "my-post.md"
         post.write_text("Just some content with no title.", encoding="utf-8")
-        title, body, meta = read_post(post)
+        title, _body, meta = read_post(post)
         assert title == "my-post"
         assert meta == {}
 

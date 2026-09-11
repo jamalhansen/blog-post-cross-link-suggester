@@ -3,7 +3,6 @@
 
 from typer.testing import CliRunner
 
-
 from cross_link.cli import app
 
 runner = CliRunner()

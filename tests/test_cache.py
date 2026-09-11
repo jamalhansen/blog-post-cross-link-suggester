@@ -2,8 +2,12 @@
 
 from pathlib import Path
 
-from cross_link.cache import get_cached_summary, init_cache, list_cached_slugs, save_summary
-
+from cross_link.cache import (
+    get_cached_summary,
+    init_cache,
+    list_cached_slugs,
+    save_summary,
+)
 
 SAMPLE_SUMMARY = {
     "title": "Intro to SQL",

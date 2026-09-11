@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from typer.testing import CliRunner
 
-from cross_link.cli import app, CrossLinkError, LLMRunError
+from cross_link.cli import CrossLinkError, LLMRunError, app
 
 runner = CliRunner()
 

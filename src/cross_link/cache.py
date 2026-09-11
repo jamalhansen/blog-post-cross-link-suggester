@@ -3,7 +3,7 @@
 import hashlib
 import json
 import sqlite3
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -65,7 +65,7 @@ def save_summary(db_path: str, slug: str, file_path: Path, summary: dict) -> Non
             summary["main_topic"],
             json.dumps(summary["key_concepts"]),
             summary["audience_stage"],
-            datetime.now().isoformat(),
+            datetime.now(UTC).isoformat(),
         ),
     )
     conn.commit()
