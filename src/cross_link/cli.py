@@ -150,7 +150,7 @@ def draft(
     )
     actual_model = get_setting(TOOL_NAME, "model", cli_val=model)
     llm = resolve_provider(
-        PROVIDERS, actual_provider, actual_model, no_llm=no_llm, debug=debug
+        PROVIDERS, actual_provider, actual_model, no_llm=no_llm, debug=debug, tool_name=TOOL_NAME
     )
 
     if dry_run:
@@ -348,7 +348,7 @@ def audit(
 
     actual_model = get_setting(TOOL_NAME, "model", cli_val=model)
     llm = resolve_provider(
-        PROVIDERS, actual_provider, actual_model, no_llm=no_llm, debug=debug
+        PROVIDERS, actual_provider, actual_model, no_llm=no_llm, debug=debug, tool_name=TOOL_NAME
     )
 
     if dry_run:
