@@ -24,7 +24,7 @@ from local_first_common.text import (
     strip_code_blocks,
     strip_markdown_links,
 )
-from local_first_common.tracking import register_tool, timed_run
+from local_first_common.tracking import register_tool
 
 from .cache import init_cache
 from .injector import _apply_links_to_file
@@ -185,72 +185,68 @@ def draft(
     all_apply_details = []
 
     for para in paragraphs:
-        with timed_run(
-            "series-cross-link-suggester", llm.model, source_location=str(post_path)
-        ) as run:
-            prompt = build_draft_prompt(para, all_summaries)
-            if debug:
-                typer.echo(f"\n[debug] Draft prompt:\n{prompt}\n")
+        llm.source_location = str(post_path)
+        llm.item_count = 1
+        prompt = build_draft_prompt(para, all_summaries)
+        if debug:
+            typer.echo(f"\n[debug] Draft prompt:\n{prompt}\n")
 
-            raw = llm.complete(LINK_EDITOR_SYSTEM, prompt)
-            if debug:
-                typer.echo(f"[debug] Response: {raw}")
+        raw = llm.complete(LINK_EDITOR_SYSTEM, prompt)
+        if debug:
+            typer.echo(f"[debug] Response: {raw}")
 
-            suggestions = parse_json_response(raw)
-            if not isinstance(suggestions, list):
-                suggestions = []
+        suggestions = parse_json_response(raw)
+        if not isinstance(suggestions, list):
+            suggestions = []
 
-            # Validation: anchor and context must exist in paragraph (outside code/links)
-            valid_for_para = []
-            para_clean = strip_markdown_links(strip_code_blocks(para))
+        # Validation: anchor and context must exist in paragraph (outside code/links)
+        valid_for_para = []
+        para_clean = strip_markdown_links(strip_code_blocks(para))
 
-            for s in suggestions:
-                try:
-                    ds = DraftLinkSuggestion(**s) if isinstance(s, dict) else s
-                    if ds.target_slug not in known_slugs:
-                        continue
-                    if ds.anchor_text not in para_clean:
-                        if verbose:
-                            typer.echo(
-                                f'    ! Dropping anchor (already linked or in code block): "{ds.anchor_text}"'
-                            )
-                        continue
-                    if ds.context_phrase not in para:
-                        continue
-
-                    valid_for_para.append(ds)
-
-                    # Prepare for apply
-                    summary = slug_to_summary[ds.target_slug]
-                    if link_format == "markdown":
-                        prefix = (
-                            url_prefix if url_prefix.endswith("/") else f"{url_prefix}/"
-                        )
-                        if summary.get("series_slug"):
-                            url = f"{prefix}{summary['series_slug']}/{ds.target_slug}/"
-                        else:
-                            url = f"{prefix}{ds.target_slug}/"
-                        replacement = f"[{ds.anchor_text}]({url})"
-                    else:
-                        replacement = f"[[{ds.target_slug}]]"
-
-                    all_apply_details.append(
-                        {
-                            "anchor": ds.anchor_text,
-                            "context": ds.context_phrase,
-                            "replacement": replacement,
-                        }
-                    )
-                except Exception as e:  # noqa: BLE001 - one malformed suggestion shouldn't stop building the rest of the apply list
+        for s in suggestions:
+            try:
+                ds = DraftLinkSuggestion(**s) if isinstance(s, dict) else s
+                if ds.target_slug not in known_slugs:
+                    continue
+                if ds.anchor_text not in para_clean:
                     if verbose:
-                        typer.echo(f"    ! Dropping suggestion (build failed): {e}")
+                        typer.echo(
+                            f'    ! Dropping anchor (already linked or in code block): "{ds.anchor_text}"'
+                        )
+                    continue
+                if ds.context_phrase not in para:
                     continue
 
-            run.item_count = 1
-            run.input_tokens = getattr(llm, "input_tokens", None) or None
-            run.output_tokens = getattr(llm, "output_tokens", None) or None
+                valid_for_para.append(ds)
 
-            paragraph_suggestions.append((para, valid_for_para))
+                # Prepare for apply
+                summary = slug_to_summary[ds.target_slug]
+                if link_format == "markdown":
+                    prefix = (
+                        url_prefix if url_prefix.endswith("/") else f"{url_prefix}/"
+                    )
+                    if summary.get("series_slug"):
+                        url = f"{prefix}{summary['series_slug']}/{ds.target_slug}/"
+                    else:
+                        url = f"{prefix}{ds.target_slug}/"
+                    replacement = f"[{ds.anchor_text}]({url})"
+                else:
+                    replacement = f"[[{ds.target_slug}]]"
+
+                all_apply_details.append(
+                    {
+                        "anchor": ds.anchor_text,
+                        "context": ds.context_phrase,
+                        "replacement": replacement,
+                    }
+                )
+            except Exception as e:  # noqa: BLE001 - one malformed suggestion shouldn't stop building the rest of the apply list
+                if verbose:
+                    typer.echo(f"    ! Dropping suggestion (build failed): {e}")
+                continue
+
+
+        paragraph_suggestions.append((para, valid_for_para))
 
     output = _format_draft_suggestions(post_path, paragraph_suggestions)
     typer.echo(output)
@@ -391,57 +387,53 @@ def audit(
         if verbose:
             typer.echo(f"  [finding] {slug} ...")
 
-        with timed_run(
-            "series-cross-link-suggester", llm.model, source_location=slug
-        ) as run:
-            prompt = build_audit_prompt(slug, title, content, all_summaries)
+        prompt = build_audit_prompt(slug, title, content, all_summaries)
+        if debug:
+            typer.echo(f"\n[debug] Audit prompt for {slug}:\n{prompt}\n")
+
+        llm.source_location = slug
+        llm.item_count = 1
+        try:
+            raw = llm.complete(LINK_EDITOR_SYSTEM, prompt)
             if debug:
-                typer.echo(f"\n[debug] Audit prompt for {slug}:\n{prompt}\n")
+                typer.echo(f"[debug] Response: {raw}")
+            suggestions = parse_json_response(raw)
+            if not isinstance(suggestions, list):
+                suggestions = []
 
-            try:
-                raw = llm.complete(LINK_EDITOR_SYSTEM, prompt)
-                if debug:
-                    typer.echo(f"[debug] Response: {raw}")
-                suggestions = parse_json_response(raw)
-                if not isinstance(suggestions, list):
-                    suggestions = []
-
-                # Validation: anchor and context must exist in content (outside code blocks and existing links)
-                content_clean = strip_markdown_links(strip_code_blocks(content))
-                valid_for_post = []
-                for s in suggestions:
-                    try:
-                        ls = LinkSuggestion(**s)
-                        if ls.anchor_text not in content_clean:
-                            if verbose:
-                                typer.echo(
-                                    f'    ! Dropping anchor (already linked or in code block): "{ls.anchor_text}"'
-                                )
-                            continue
-                        if ls.context_phrase not in content:
-                            if verbose:
-                                typer.echo(
-                                    f'    ! Dropping context (not found in content): "{ls.context_phrase}"'
-                                )
-                            continue
-                        valid_for_post.append(ls.model_dump())
-                    except Exception as e:  # noqa: BLE001 - one malformed suggestion shouldn't stop validating the rest
+            # Validation: anchor and context must exist in content (outside code blocks and existing links)
+            content_clean = strip_markdown_links(strip_code_blocks(content))
+            valid_for_post = []
+            for s in suggestions:
+                try:
+                    ls = LinkSuggestion(**s)
+                    if ls.anchor_text not in content_clean:
                         if verbose:
-                            typer.echo(f"    ! Dropping suggestion (validation failed): {e}")
+                            typer.echo(
+                                f'    ! Dropping anchor (already linked or in code block): "{ls.anchor_text}"'
+                            )
                         continue
-                suggestions = valid_for_post
+                    if ls.context_phrase not in content:
+                        if verbose:
+                            typer.echo(
+                                f'    ! Dropping context (not found in content): "{ls.context_phrase}"'
+                            )
+                        continue
+                    valid_for_post.append(ls.model_dump())
+                except Exception as e:  # noqa: BLE001 - one malformed suggestion shouldn't stop validating the rest
+                    if verbose:
+                        typer.echo(f"    ! Dropping suggestion (validation failed): {e}")
+                    continue
+            suggestions = valid_for_post
 
-                run.item_count = 1
-                run.input_tokens = getattr(llm, "input_tokens", None) or None
-                run.output_tokens = getattr(llm, "output_tokens", None) or None
-            except LLMRunError as e:
-                typer.echo(f"  Warning: failed for {slug}: {e}", err=True)
-                suggestions = []
-                skipped += 1
-            except Exception as e:  # noqa: BLE001 - top-level per-post boundary: report and skip, don't crash the whole audit run
-                typer.echo(f"  Warning: failed for {slug}: {e}", err=True)
-                suggestions = []
-                skipped += 1
+        except LLMRunError as e:
+            typer.echo(f"  Warning: failed for {slug}: {e}", err=True)
+            suggestions = []
+            skipped += 1
+        except Exception as e:  # noqa: BLE001 - top-level per-post boundary: report and skip, don't crash the whole audit run
+            typer.echo(f"  Warning: failed for {slug}: {e}", err=True)
+            suggestions = []
+            skipped += 1
 
         opportunities.append(
             {"post_slug": slug, "post_title": title, "suggestions": suggestions}

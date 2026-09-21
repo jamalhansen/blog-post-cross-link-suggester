@@ -5,7 +5,6 @@ from pathlib import Path
 
 import typer
 from local_first_common.llm import parse_json_response
-from local_first_common.tracking import timed_run
 
 from .cache import get_cached_summary, save_summary
 from .posts import read_post, slugify
@@ -42,14 +41,10 @@ def _extract_summary(
         series_name = series[0] if isinstance(series, list) else series
         series_slug = slugify(series_name)
 
-    with timed_run(
-        "series-cross-link-suggester", provider.model, source_location=slug
-    ) as run:
-        raw = provider.complete(SUMMARY_SYSTEM, build_summary_prompt(body))
-        data = parse_json_response(raw)
-        run.item_count = 1
-        run.input_tokens = getattr(provider, "input_tokens", None) or None
-        run.output_tokens = getattr(provider, "output_tokens", None) or None
+    provider.source_location = slug
+    provider.item_count = 1
+    raw = provider.complete(SUMMARY_SYSTEM, build_summary_prompt(body))
+    data = parse_json_response(raw)
 
     summary = PostSummary(
         title=data.get("title") or title,
