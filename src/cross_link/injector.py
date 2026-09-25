@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from local_first_common.obsidian import split_frontmatter
 from local_first_common.text import split_markdown_protected
 
 
@@ -12,19 +13,12 @@ def apply_links_to_file(file_path: Path, link_details: list[dict]) -> bool:
     """
     raw = file_path.read_text(encoding="utf-8")
 
-    # Split by frontmatter delimiters
-    if raw.startswith("---"):
-        parts = raw.split("---", 3)
-        if len(parts) >= 3:
-            # parts[0] is "", parts[1] is frontmatter, parts[2] is body
-            header = f"---{parts[1]}---\n"
-            body = parts[2]
-        else:
-            header = ""
-            body = raw
+    parts = split_frontmatter(raw)
+    if parts is None:
+        header, body = "", raw
     else:
-        header = ""
-        body = raw
+        fm_yaml, body = parts
+        header = f"---\n{fm_yaml}---\n"
 
     # Split body into chunks: [text, protected, text, protected, ...]
     # Protected elements: fenced code, inline code, markdown links, wiki links

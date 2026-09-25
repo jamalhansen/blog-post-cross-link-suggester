@@ -157,3 +157,18 @@ This is the body text. Replace me."""
     
     # Check that body was updated
     assert '[Replace me](/blog/target-post/)' in updated
+
+
+def test_apply_keeps_content_after_horizontal_rule(tmp_path):
+    from cross_link.injector import apply_links_to_file
+
+    post = tmp_path / "post.md"
+    post.write_text(
+        "---\ntitle: T\n---\nIntro mentions DuckDB here.\n\n---\n\nSection after a rule.\n",
+        encoding="utf-8",
+    )
+
+    assert apply_links_to_file(post, [{"anchor": "DuckDB", "replacement": "[DuckDB](/x/)"}])
+    assert post.read_text(encoding="utf-8") == (
+        "---\ntitle: T\n---\nIntro mentions [DuckDB](/x/) here.\n\n---\n\nSection after a rule.\n"
+    )
