@@ -62,9 +62,7 @@ def draft(
     ],
     series_dir: Annotated[
         str,
-        typer.Option(
-            "--series-dir", "-s", help="Directory containing published series posts"
-        ),
+        typer.Option("--series-dir", "-s", help="Directory containing published series posts"),
     ] = os.environ.get("SERIES_DIR", ""),
     provider_name: Annotated[str, provider_option()] = "ollama",
     model: Annotated[
@@ -73,9 +71,7 @@ def draft(
     ] = None,
     cache: Annotated[
         str | None,
-        typer.Option(
-            "--cache", "-c", help="Path to SQLite cache file for series summaries"
-        ),
+        typer.Option("--cache", "-c", help="Path to SQLite cache file for series summaries"),
     ] = None,
     dry_run: Annotated[bool, dry_run_option()] = False,
     no_llm: Annotated[bool, no_llm_option()] = False,
@@ -131,9 +127,7 @@ def draft(
         raise typer.Exit(1)
 
     if not series_dir:
-        typer.echo(
-            "Error: --series-dir is required (or set SERIES_DIR env var)", err=True
-        )
+        typer.echo("Error: --series-dir is required (or set SERIES_DIR env var)", err=True)
         raise typer.Exit(1)
 
     series_path = Path(series_dir)
@@ -141,22 +135,14 @@ def draft(
         typer.echo(f"Error: Series directory not found: {series_path}", err=True)
         raise typer.Exit(1)
 
-    series_posts = sorted(
-        p for p in series_path.glob("**/*.md") if p != post_path and is_valid_post(p)
-    )
+    series_posts = sorted(p for p in series_path.glob("**/*.md") if p != post_path and is_valid_post(p))
 
-    actual_provider = get_setting(
-        TOOL_NAME, "provider", cli_val=provider_name, default="ollama"
-    )
+    actual_provider = get_setting(TOOL_NAME, "provider", cli_val=provider_name, default="ollama")
     actual_model = get_setting(TOOL_NAME, "model", cli_val=model)
-    llm = resolve_provider(
-        PROVIDERS, actual_provider, actual_model, no_llm=no_llm, debug=debug, tool_name=TOOL_NAME
-    )
+    llm = resolve_provider(PROVIDERS, actual_provider, actual_model, no_llm=no_llm, debug=debug, tool_name=TOOL_NAME)
 
     if dry_run:
-        typer.echo(
-            f"[dry-run] Would analyse {post_path.name} against {len(series_posts)} posts in {series_path}"
-        )
+        typer.echo(f"[dry-run] Would analyse {post_path.name} against {len(series_posts)} posts in {series_path}")
         raise typer.Exit(0)
 
     # Build summaries for all series posts
@@ -210,9 +196,7 @@ def draft(
                     continue
                 if ds.anchor_text not in para_clean:
                     if verbose:
-                        typer.echo(
-                            f'    ! Dropping anchor (already linked or in code block): "{ds.anchor_text}"'
-                        )
+                        typer.echo(f'    ! Dropping anchor (already linked or in code block): "{ds.anchor_text}"')
                     continue
                 if ds.context_phrase not in para:
                     continue
@@ -222,9 +206,7 @@ def draft(
                 # Prepare for apply
                 summary = slug_to_summary[ds.target_slug]
                 if link_format == "markdown":
-                    prefix = (
-                        url_prefix if url_prefix.endswith("/") else f"{url_prefix}/"
-                    )
+                    prefix = url_prefix if url_prefix.endswith("/") else f"{url_prefix}/"
                     if summary.get("series_slug"):
                         url = f"{prefix}{summary['series_slug']}/{ds.target_slug}/"
                     else:
@@ -244,7 +226,6 @@ def draft(
                 if verbose:
                     typer.echo(f"    ! Dropping suggestion (build failed): {e}")
                 continue
-
 
         paragraph_suggestions.append((para, valid_for_para))
 
@@ -277,9 +258,7 @@ def audit(
     ] = "",
     cache: Annotated[
         str | None,
-        typer.Option(
-            "--cache", "-c", help="Path to SQLite cache file for post summaries"
-        ),
+        typer.Option("--cache", "-c", help="Path to SQLite cache file for post summaries"),
     ] = None,
     new_only: Annotated[
         str | None,
@@ -319,9 +298,7 @@ def audit(
 ):
     """Batch-scan a post archive and produce a cross-link checklist report."""
 
-    actual_provider = get_setting(
-        TOOL_NAME, "provider", cli_val=provider_name, default="ollama"
-    )
+    actual_provider = get_setting(TOOL_NAME, "provider", cli_val=provider_name, default="ollama")
     cache_path = str(
         resolve_sync_path(
             "series-cross-link-suggester",
@@ -343,9 +320,7 @@ def audit(
         raise typer.Exit(1)
 
     actual_model = get_setting(TOOL_NAME, "model", cli_val=model)
-    llm = resolve_provider(
-        PROVIDERS, actual_provider, actual_model, no_llm=no_llm, debug=debug, tool_name=TOOL_NAME
-    )
+    llm = resolve_provider(PROVIDERS, actual_provider, actual_model, no_llm=no_llm, debug=debug, tool_name=TOOL_NAME)
 
     if dry_run:
         typer.echo(f"[dry-run] Would scan {len(posts)} posts in {series_path}")
@@ -409,15 +384,11 @@ def audit(
                     ls = LinkSuggestion(**s)
                     if ls.anchor_text not in content_clean:
                         if verbose:
-                            typer.echo(
-                                f'    ! Dropping anchor (already linked or in code block): "{ls.anchor_text}"'
-                            )
+                            typer.echo(f'    ! Dropping anchor (already linked or in code block): "{ls.anchor_text}"')
                         continue
                     if ls.context_phrase not in content:
                         if verbose:
-                            typer.echo(
-                                f'    ! Dropping context (not found in content): "{ls.context_phrase}"'
-                            )
+                            typer.echo(f'    ! Dropping context (not found in content): "{ls.context_phrase}"')
                         continue
                     valid_for_post.append(ls.model_dump())
                 except Exception as e:  # noqa: BLE001 - one malformed suggestion shouldn't stop validating the rest
@@ -435,26 +406,18 @@ def audit(
             suggestions = []
             skipped += 1
 
-        opportunities.append(
-            {"post_slug": slug, "post_title": title, "suggestions": suggestions}
-        )
+        opportunities.append({"post_slug": slug, "post_title": title, "suggestions": suggestions})
 
     # Generate report
-    report_text = _format_audit_report(
-        opportunities, all_summaries, link_format, url_prefix
-    )
+    report_text = _format_audit_report(opportunities, all_summaries, link_format, url_prefix)
     output_path = (
-        Path(output)
-        if output
-        else Path(f"link-opportunities-{datetime.now().astimezone().date().isoformat()}.md")
+        Path(output) if output else Path(f"link-opportunities-{datetime.now().astimezone().date().isoformat()}.md")
     )
 
     output_path.write_text(report_text, encoding="utf-8")
     typer.echo(f"\nReport written to: {output_path}")
     total_suggestions = sum(len(o["suggestions"]) for o in opportunities)
-    typer.echo(
-        f"\nDone. Processed: {len(target_posts)}, Skipped: {skipped}, Suggestions: {total_suggestions}"
-    )
+    typer.echo(f"\nDone. Processed: {len(target_posts)}, Skipped: {skipped}, Suggestions: {total_suggestions}")
 
 
 @app.command()
@@ -513,24 +476,14 @@ def apply(
             i += 1
 
             # 3. Consume following detail lines (Anchor, Context, Suggested)
-            while (
-                i < len(lines)
-                and not lines[i].startswith("##")
-                and not re.match(r"^\s*[-*+]\s+\[", lines[i])
-            ):
+            while i < len(lines) and not lines[i].startswith("##") and not re.match(r"^\s*[-*+]\s+\[", lines[i]):
                 detail_line = lines[i].strip()
                 if detail_line.startswith("Anchor:"):
-                    detail["anchor"] = (
-                        detail_line.split("Anchor:", 1)[1].strip().strip('"')
-                    )
+                    detail["anchor"] = detail_line.split("Anchor:", 1)[1].strip().strip('"')
                 elif detail_line.startswith("Context:"):
-                    detail["context"] = (
-                        detail_line.split("Context:", 1)[1].strip().strip('"')
-                    )
+                    detail["context"] = detail_line.split("Context:", 1)[1].strip().strip('"')
                 elif detail_line.startswith("Suggested:"):
-                    detail["replacement"] = detail_line.split("Suggested:", 1)[
-                        1
-                    ].strip()
+                    detail["replacement"] = detail_line.split("Suggested:", 1)[1].strip()
                 i += 1
 
             if "anchor" in detail and "replacement" in detail:
@@ -552,16 +505,12 @@ def apply(
     modified_count = 0
     for source_slug, link_details in actions.items():
         if source_slug not in slug_to_path_map:
-            typer.echo(
-                f"Warning: Could not find file for slug '{source_slug}'", err=True
-            )
+            typer.echo(f"Warning: Could not find file for slug '{source_slug}'", err=True)
             continue
 
         file_path = slug_to_path_map[source_slug]
         if dry_run:
-            typer.echo(
-                f"[dry-run] Would add {len(link_details)} links to {file_path.name}"
-            )
+            typer.echo(f"[dry-run] Would add {len(link_details)} links to {file_path.name}")
             for d in link_details:
                 typer.echo(f'  + Replace "{d["anchor"]}" with "{d["replacement"]}"')
         else:

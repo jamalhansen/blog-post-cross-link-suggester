@@ -1,6 +1,5 @@
 """Tests for series-cross-link-suggester CLI."""
 
-
 from typer.testing import CliRunner
 
 from cross_link.cli import app
@@ -16,21 +15,31 @@ class TestDraftCommand:
         series = tmp_path / "series"
         series.mkdir()
 
-        result = runner.invoke(app, [
-            "draft", str(post),
-            "--series-dir", str(series),
-            "--dry-run",
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "draft",
+                str(post),
+                "--series-dir",
+                str(series),
+                "--dry-run",
+            ],
+        )
 
         assert result.exit_code == 0
         assert "dry-run" in result.output
 
     def test_missing_post_file(self, tmp_path):
         """Should fail fast if the post file doesn't exist."""
-        result = runner.invoke(app, [
-            "draft", str(tmp_path / "nonexistent.md"),
-            "--series-dir", str(tmp_path),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "draft",
+                str(tmp_path / "nonexistent.md"),
+                "--series-dir",
+                str(tmp_path),
+            ],
+        )
 
         assert result.exit_code == 1
         assert "not found" in result.output.lower()
@@ -53,10 +62,14 @@ class TestAuditCommand:
         (series / "post-01.md").write_text("# Post 1")
         (series / "post-02.md").write_text("# Post 2")
 
-        result = runner.invoke(app, [
-            "audit", str(series),
-            "--dry-run",
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "audit",
+                str(series),
+                "--dry-run",
+            ],
+        )
 
         assert result.exit_code == 0
         assert "dry-run" in result.output

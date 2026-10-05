@@ -20,9 +20,7 @@ class LLMRunError(CrossLinkError):
     """Raised when an LLM call fails fatally during cross-link generation."""
 
 
-def _extract_summary(
-    provider, post_path: Path, slug: str, cache_path: str, verbose: bool
-) -> dict:
+def _extract_summary(provider, post_path: Path, slug: str, cache_path: str, verbose: bool) -> dict:
     """Return summary dict for a post, using cache if available."""
     cached = get_cached_summary(cache_path, slug, post_path)
     if cached:
@@ -117,9 +115,7 @@ def _format_audit_report(
 format_audit_report = _format_audit_report
 
 
-def _format_draft_suggestions(
-    post_path: Path, paragraph_suggestions: list[tuple[str, list]]
-) -> str:
+def _format_draft_suggestions(post_path: Path, paragraph_suggestions: list[tuple[str, list]]) -> str:
     """Render draft mode results as readable terminal output."""
     lines = [f"Cross-link suggestions for: {post_path.name}", ""]
     any_found = False

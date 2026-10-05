@@ -54,13 +54,15 @@ class TestBuildAuditPrompt:
         assert "[sql-joins]" in prompt
 
     def test_excludes_target_post_itself(self):
-        summaries = SAMPLE_SUMMARIES + [{
-            "slug": "window-functions",
-            "title": "Window Functions",
-            "main_topic": "ROW_NUMBER and RANK",
-            "key_concepts": ["ROW_NUMBER", "RANK"],
-            "audience_stage": "advanced",
-        }]
+        summaries = SAMPLE_SUMMARIES + [
+            {
+                "slug": "window-functions",
+                "title": "Window Functions",
+                "main_topic": "ROW_NUMBER and RANK",
+                "key_concepts": ["ROW_NUMBER", "RANK"],
+                "audience_stage": "advanced",
+            }
+        ]
         prompt = build_audit_prompt("window-functions", "Window Functions", "Content", summaries)
         # Should only appear once (in the target section), not in the other posts list
         assert prompt.count("window-functions") == 1

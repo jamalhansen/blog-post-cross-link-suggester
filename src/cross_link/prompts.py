@@ -47,8 +47,7 @@ def build_audit_prompt(
 ) -> str:
     """Build the user prompt for finding cross-link opportunities."""
     other_posts = "\n".join(
-        f"- [{s['slug']}] {s['title']} — {s['main_topic']}"
-        f" (concepts: {', '.join(s['key_concepts'][:3])})"
+        f"- [{s['slug']}] {s['title']} — {s['main_topic']} (concepts: {', '.join(s['key_concepts'][:3])})"
         for s in all_summaries
         if s["slug"] != target_slug
     )
@@ -62,11 +61,7 @@ def build_audit_prompt(
 def build_draft_prompt(paragraph: str, all_summaries: list[dict]) -> str:
     """Build the user prompt for suggesting links in a draft paragraph."""
     posts_list = "\n".join(
-        f"- [{s['slug']}] {s['title']} — {s['main_topic']}"
-        f" (concepts: {', '.join(s['key_concepts'][:3])})"
+        f"- [{s['slug']}] {s['title']} — {s['main_topic']} (concepts: {', '.join(s['key_concepts'][:3])})"
         for s in all_summaries
     )
-    return (
-        f"Draft paragraph:\n{paragraph}\n\n"
-        f"Published posts in the series:\n{posts_list}"
-    )
+    return f"Draft paragraph:\n{paragraph}\n\nPublished posts in the series:\n{posts_list}"

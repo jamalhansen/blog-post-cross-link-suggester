@@ -34,9 +34,7 @@ def get_cached_summary(db_path: str, slug: str, file_path: Path) -> dict | None:
     """Return cached summary dict if file hasn't changed since last cache, else None."""
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
-    row = conn.execute(
-        "SELECT * FROM post_summaries WHERE slug = ?", (slug,)
-    ).fetchone()
+    row = conn.execute("SELECT * FROM post_summaries WHERE slug = ?", (slug,)).fetchone()
     conn.close()
     if row is None:
         return None
