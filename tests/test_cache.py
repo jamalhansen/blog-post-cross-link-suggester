@@ -78,7 +78,7 @@ class TestSaveAndGetSummary:
         save_summary(db, "my-post", post, updated)
 
         result = get_cached_summary(db, "my-post", post)
-        assert result["title"] == "Updated Title"
+        assert result is not None and result["title"] == "Updated Title"
 
 
 class TestListCachedSlugs:

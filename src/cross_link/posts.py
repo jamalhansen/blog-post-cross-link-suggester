@@ -46,7 +46,7 @@ def read_post(path: Path) -> tuple[str, str, dict]:
     raw = path.read_text(encoding="utf-8")
     post = frontmatter.loads(raw)
 
-    title = post.metadata.get("title", "")
+    title = str(post.metadata.get("title") or "")
     body = post.content
 
     if not title:

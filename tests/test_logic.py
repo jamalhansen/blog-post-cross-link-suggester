@@ -147,7 +147,7 @@ class TestDraftCommandWithMock:
                 provider.calls.append((system, user))
                 return resp
 
-            provider.complete = rotating_complete
+            provider.complete = rotating_complete  # pyright: ignore[reportAttributeAccessIssue]  # instance-level stub
 
             result = runner.invoke(
                 app,
@@ -217,7 +217,7 @@ class TestAuditCommandWithMock:
             provider.calls.append((system, user))
             return resp
 
-        provider.complete = rotating_complete
+        provider.complete = rotating_complete  # pyright: ignore[reportAttributeAccessIssue]  # instance-level stub
 
         with patch("cross_link.cli.resolve_provider", return_value=provider):
             result = runner.invoke(
@@ -262,7 +262,7 @@ class TestAuditCommandWithMock:
             provider.calls.append((system, user))
             return resp
 
-        provider.complete = rotating_complete
+        provider.complete = rotating_complete  # pyright: ignore[reportAttributeAccessIssue]  # instance-level stub
 
         with patch("cross_link.cli.resolve_provider", return_value=provider):
             runner.invoke(
@@ -307,7 +307,7 @@ class TestAuditCommandWithMock:
             provider.calls.append((system, user))
             return resp
 
-        provider.complete = rotating_complete
+        provider.complete = rotating_complete  # pyright: ignore[reportAttributeAccessIssue]  # instance-level stub
 
         with patch("cross_link.cli.resolve_provider", return_value=provider):
             result = runner.invoke(
@@ -362,7 +362,7 @@ class TestAuditCommandWithMock:
             provider.calls.append((system, user))
             return resp
 
-        provider.complete = rotating_complete
+        provider.complete = rotating_complete  # pyright: ignore[reportAttributeAccessIssue]  # instance-level stub
 
         with patch("cross_link.cli.resolve_provider", return_value=provider):
             runner.invoke(
@@ -405,7 +405,7 @@ class TestAuditCommandWithMock:
                 p.calls.append((system, user))
                 return resp
 
-            p.complete = rotating_complete
+            p.complete = rotating_complete  # pyright: ignore[reportAttributeAccessIssue]  # instance-level stub
             return p
 
         # First run — summaries get cached
@@ -468,7 +468,7 @@ class TestAuditCommandWithMock:
             provider.calls.append((system, user))
             return resp
 
-        provider.complete = rotating_complete
+        provider.complete = rotating_complete  # pyright: ignore[reportAttributeAccessIssue]  # instance-level stub
 
         with patch("cross_link.cli.resolve_provider", return_value=provider):
             runner.invoke(

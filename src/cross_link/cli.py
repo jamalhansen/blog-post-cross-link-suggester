@@ -191,7 +191,9 @@ def draft(
 
         for s in suggestions:
             try:
-                ds = DraftLinkSuggestion(**s) if isinstance(s, dict) else s
+                if not isinstance(s, dict):  # the model sometimes returns bare strings
+                    continue
+                ds = DraftLinkSuggestion(**s)
                 if ds.target_slug not in known_slugs:
                     continue
                 if ds.anchor_text not in para_clean:
@@ -381,6 +383,8 @@ def audit(
             valid_for_post = []
             for s in suggestions:
                 try:
+                    if not isinstance(s, dict):
+                        continue
                     ls = LinkSuggestion(**s)
                     if ls.anchor_text not in content_clean:
                         if verbose:
